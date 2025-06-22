@@ -1,10 +1,12 @@
 # main.py  – rulează cu:  python -m uvicorn main:app --reload
 from typing import List, Optional
+from enum import Enum as PyEnum
+from sqlalchemy import Enum as SAEnum
 
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from pydantic_settings import BaseSettings
-from sqlalchemy import Column, Integer, String, ForeignKey, create_engine
+from sqlalchemy import Column, Integer, String, ForeignKey, create_engine, UniqueConstraint, Table
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, Session
 
 # --------------------------------------------------------------------
@@ -32,15 +34,51 @@ def get_db() -> Session:
     finally:
         db.close()
 
+supplier_category = Table(                   # table punte
+    "supplier_category",
+    Base.metadata,
+    Column("supplier_id", ForeignKey("suppliers.id"), primary_key=True),
+    Column("category_id", ForeignKey("categories.id"), primary_key=True),
+)
+
 # --------------------------------------------------------------------
 # 3) Modele BD (agencies, suppliers, contacts)
 # --------------------------------------------------------------------
+
+class SupplierType(PyEnum):
+    MATERIAL = "material"
+    SERVICE  = "service"
+
+class Offering(Base):
+     __tablename__ = "offerings"
+     id          = Column(Integer, primary_key=True)
+     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
+     name        = Column(String(150), nullable=False)
+
+     supplier = relationship("Supplier", back_populates="offerings")
+
 class Agency(Base):
     __tablename__ = "agencies"
     id   = Column(Integer, primary_key=True)
     name = Column(String(100), unique=True, nullable=False)
 
     suppliers = relationship("Supplier", back_populates="agency")
+
+class Category(Base):              # ② MODEL cu 'type'
+    __tablename__ = "categories"
+    id   = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    type = Column(SAEnum(SupplierType), nullable=False)   # ← NEW
+
+    __table_args__ = (
+        UniqueConstraint("name", "type"),                 # unic pe (nume, tip)
+    )
+
+    suppliers = relationship(
+        "Supplier",
+        secondary=supplier_category,
+        back_populates="categories",
+    )
 
 class Supplier(Base):
     __tablename__ = "suppliers"
@@ -53,6 +91,18 @@ class Supplier(Base):
     agency   = relationship("Agency", back_populates="suppliers")
     contacts = relationship("Contact", back_populates="supplier",
                             cascade="all, delete-orphan")
+
+    categories = relationship(
+        "Category",
+        secondary=supplier_category,
+        back_populates="suppliers",
+    )
+
+    offerings = relationship(
+        "Offering",
+        back_populates="supplier",
+        cascade="all, delete-orphan",
+    )
 
 class Contact(Base):
     __tablename__ = "contacts"
@@ -76,6 +126,21 @@ class AgencyOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class OfferingIn(BaseModel):
+    name: str
+
+class OfferingOut(OfferingIn):
+    id: int
+    model_config = {"from_attributes": True}
+
+class CategoryIn(BaseModel):
+    name: str
+    type: SupplierType
+
+class CategoryOut(CategoryIn):
+    id: int
+    model_config = {"from_attributes": True}
+
 class ContactIn(BaseModel):
     full_name: str
     email: Optional[EmailStr] = None
@@ -83,15 +148,17 @@ class ContactIn(BaseModel):
 
 class SupplierIn(BaseModel):
     name: str
+    category_ids: List[int]
     office_email: Optional[EmailStr] = None
     office_phone: Optional[str] = None
     contacts: List[ContactIn] = []
+    offerings: List[OfferingIn] = []
 
 class SupplierOut(SupplierIn):
     id: int
     agency_id: int
     contacts: List[ContactIn]
-
+    offerings: List[OfferingOut]
     model_config = {"from_attributes": True}
 
 # --------------------------------------------------------------------
@@ -119,6 +186,49 @@ def create_agency(a: AgencyIn, db: Session = Depends(get_db)):
     db.refresh(ag)
     return ag
 
+# ------------ categorii disponibile într-o agenție -----------------
+@app.get("/agencies/{agency_id}/categories", response_model=list[CategoryOut])
+def categories_by_agency(agency_id: int, db: Session = Depends(get_db)):
+    return (
+        db.query(Category)
+          .join(Category.suppliers)
+          .filter(Supplier.agency_id == agency_id)
+          .distinct()
+          .order_by(Category.name)
+          .all()
+    )
+
+@app.post("/categories", response_model=CategoryOut, status_code=201)
+def create_category(c: CategoryIn, db: Session = Depends(get_db)):
+    if db.query(Category).filter_by(name=c.name, type=c.type).first():
+        raise HTTPException(400, "Category exists")
+    cat = Category(name=c.name, type=c.type)
+    db.add(cat); db.commit(); db.refresh(cat)
+    return cat
+
+# ----------- furnizorii dintr-o categorie & agenție -----------------
+@app.get(
+    "/agencies/{agency_id}/categories/{cat_id}/suppliers",
+    response_model=list[SupplierOut],
+)
+def suppliers_by_category(
+    agency_id: int,
+    cat_id: int,
+    db: Session = Depends(get_db)
+):
+    return (
+        db.query(Supplier)
+           .join(                             # JOIN pe tabela punte
+              supplier_category,
+              Supplier.id == supplier_category.c.supplier_id
+          ).filter(
+              Supplier.agency_id == agency_id,
+              supplier_category.c.category_id == cat_id
+          )
+          .order_by(Supplier.name)
+          .all()
+    )
+
 # --------------- Furnizori pe agenție -------------------------------
 @app.get("/agencies/{agency_id}/suppliers", response_model=list[SupplierOut])
 def suppliers_by_agency(agency_id: int, db: Session = Depends(get_db)):
@@ -137,17 +247,22 @@ def add_supplier_for_agency(
         raise HTTPException(404, "Agency not found")
 
     sp = Supplier(
-        agency_id=agency_id,
-        name=s.name,
-        office_email=s.office_email,
-        office_phone=s.office_phone,
+        agency_id = agency_id,
+        name      = s.name,
+        office_email = s.office_email,
+        office_phone = s.office_phone,
     )
-    db.add(sp)
-    db.commit()
-    db.refresh(sp)
+    # mapăm categoriile
+    cats = db.query(Category).filter(Category.id.in_(s.category_ids)).all()
+    if len(cats) != len(s.category_ids):
+        raise HTTPException(400, "One or more category_ids are invalid")
+    sp.categories = cats
+    db.add(sp); db.commit(); db.refresh(sp)
 
     for c in s.contacts:
         db.add(Contact(**c.dict(), supplier_id=sp.id))
+    for off in s.offerings:
+        db.add(Offering(**off.dict(), supplier=sp))
     db.commit()
     db.refresh(sp)
     return sp
@@ -163,12 +278,22 @@ def update_supplier(
     if not sp:
         raise HTTPException(404, "Supplier not found")
 
-    for key, val in s.dict(exclude={"contacts"}).items():
-        setattr(sp, key, val)
+    for key, val in s.dict(exclude={"contacts", "category_ids", "offerings"}).items():
+         setattr(sp, key, val)
 
+    # rescriem categoriile
+    cats = db.query(Category).filter(Category.id.in_(s.category_ids)).all()
+    if len(cats) != len(s.category_ids):
+        raise HTTPException(400, "One or more category_ids are invalid")
+    sp.categories = cats
+
+    # rescriem contactele
     db.query(Contact).filter_by(supplier_id=sp.id).delete()
     for c in s.contacts:
         db.add(Contact(**c.dict(), supplier_id=sp.id))
+    db.query(Offering).filter_by(supplier_id=sp.id).delete()
+    for off in s.offerings:
+        db.add(Offering(**off.dict(), supplier=sp))
     db.commit()
     db.refresh(sp)
     return sp
@@ -178,3 +303,17 @@ def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
     if not db.query(Supplier).filter_by(id=supplier_id).delete():
         raise HTTPException(404, "Supplier not found")
     db.commit()
+
+@app.get("/suppliers/{supplier_id}/offerings", response_model=list[OfferingOut])
+def list_offerings(supplier_id: int, db: Session = Depends(get_db)):
+    return db.query(Offering).filter_by(supplier_id=supplier_id).all()
+
+@app.get("/agencies/{agency_id}/{sup_type}/categories", response_model=list[CategoryOut])
+def cats_by_type(agency_id: int, sup_type: SupplierType, db: Session = Depends(get_db)):
+    return (db.query(Category)
+             .join(Category.suppliers)
+             .filter(Supplier.agency_id == agency_id,
+                     Category.type == sup_type)
+             .distinct()
+             .order_by(Category.name)
+             .all())
