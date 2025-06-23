@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 from pydantic_settings import BaseSettings
 from sqlalchemy import Column, Integer, String, ForeignKey, create_engine, UniqueConstraint, Table
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, Session
+from fastapi.middleware.cors import CORSMiddleware
 
 # --------------------------------------------------------------------
 # 1) Config
@@ -165,6 +166,15 @@ class SupplierOut(SupplierIn):
 # 5) FastAPI
 # --------------------------------------------------------------------
 app = FastAPI(title="Furnizori API – single file")
+
+# ­­­­­­­­­­­­­­­­­ CORS ­­­­­­­­­­­­­­­­­
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 def create_tables() -> None:
