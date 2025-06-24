@@ -10,6 +10,6 @@ body {
   background-image: url('/src/assets/background1.jpg');
   background-repeat: no-repeat;
   background-position: left top;
-  background-size: auto 100%;
+  background-size: cover;
   background-attachment: fixed;
 }

@@ -13,6 +13,15 @@ import {
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const images = import.meta.glob('../assets/*.png', { eager: true, import: 'default' });
+// rezultatul e: { "../assets/brasov.png":"/assets/brasov.xxx.png", … }
+
+const cityImg = {};
+for (const path in images) {
+  // extrage numele fără extensie
+  const key = path.split('/').pop().replace('.png', '');
+  cityImg[key] = images[path];
+}
 // ─────────────────────────────────────────
 //  Helpers
 const MotionPaper = motion(Paper);
@@ -59,7 +68,6 @@ export default function Home() {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'flex-start',
-        px: 3,
         pt: { xs: 8, md: 12 },
       }}
     >
@@ -76,6 +84,7 @@ export default function Home() {
         >
           {agencies.map((a, idx) => {
             // direcţia de exit – jumătate stânga, jumătate dreapta
+            console.log('id:', a.id);
             const exitVariant =
               clickedId && a.id !== clickedId
                 ? idx % 2 === 0
@@ -100,7 +109,7 @@ export default function Home() {
                   whileTap={{ scale: 0.97 }}
                   onClick={() => handleClick(a.id)}
                   sx={{
-                    width: { xs: '80vw', sm: 280, md: 320 },
+                    width: { xs: '95vw', sm: 400, md: 450},
                     height: { xs: '55vh', md: '70vh' },
                     display: 'flex',
                     flexDirection: 'column',
@@ -118,6 +127,21 @@ export default function Home() {
                   elevation={0}
                 >
                   {/* ACCENT DECORATIV – un gradient pe colţ */}
+                  {/* FOTO ORAȘ – blend cu gradient */}
+                <Box
+                component="img"
+                src={cityImg[a.name.toLowerCase()]}
+                alt={a.name}
+                sx={{
+                    position: 'absolute',
+                    inset: a.id == 3 ? '23% 0 0 0' : '25% 0 0 0',
+                    objectFit: 'contain',        // ‘cover’ sau ‘contain’ depinde de poză
+                    filter: 'grayscale(1) contrast(1.25)',
+                    mixBlendMode: 'luminosity',
+                    opacity: 0.82,
+                    pointerEvents: 'none',
+                }}
+                />
                   <Box
                     sx={{
                       position: 'absolute',
@@ -137,14 +161,7 @@ export default function Home() {
                         textShadow: '0 2px 6px rgba(0,0,0,.5)',
                       }}
                     >
-                      {a.name}
-                    </Typography>
-
-                    <Typography
-                      variant="body1"
-                      sx={{ color: 'rgba(255,255,255,0.85)' }}
-                    >
-                      {`Descoperă furnizorii și categoriile ${a.name} într‑o interfață modernă, rapidă și intuitivă.`}
+                      Agentia {a.name}
                     </Typography>
                   </Stack>
 
