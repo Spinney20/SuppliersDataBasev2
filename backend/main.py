@@ -2,6 +2,8 @@
 from typing import List, Optional
 from enum import Enum as PyEnum
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy import or_
+from sqlalchemy import and_
 
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
@@ -38,7 +40,7 @@ def get_db() -> Session:
 supplier_category = Table(                   # table punte
     "supplier_category",
     Base.metadata,
-    Column("supplier_id", ForeignKey("suppliers.id"), primary_key=True),
+    Column("supplier_id", ForeignKey("suppliers.id", ondelete="CASCADE"), primary_key=True),
     Column("category_id", ForeignKey("categories.id"), primary_key=True),
 )
 
@@ -96,8 +98,13 @@ class Supplier(Base):
     categories = relationship(
         "Category",
         secondary=supplier_category,
-        back_populates="suppliers",
+        passive_deletes=True,
     )
+
+    @property
+    def category_ids(self) -> list[int]:
+        """Lista id‑urilor de categorii asociate – folosită de SupplierOut."""
+        return [c.id for c in self.categories]
 
     offerings = relationship(
         "Offering",
@@ -197,12 +204,25 @@ def create_agency(a: AgencyIn, db: Session = Depends(get_db)):
     return ag
 
 # ------------ categorii disponibile într-o agenție -----------------
-@app.get("/agencies/{agency_id}/categories", response_model=list[CategoryOut])
-def categories_by_agency(agency_id: int, db: Session = Depends(get_db)):
+@app.get("/agencies/{agency_id}/{sup_type}/categories", response_model=list[CategoryOut])
+def cats_by_type(agency_id: int, sup_type: SupplierType, db: Session = Depends(get_db)):
     return (
         db.query(Category)
-          .join(Category.suppliers)
-          .filter(Supplier.agency_id == agency_id)
+          # 1) legăm puntea
+          .outerjoin(
+             supplier_category,
+             Category.id == supplier_category.c.category_id
+          )
+          # 2) legăm doar furnizorii din agenția curentă
+          .outerjoin(
+             Supplier,
+             and_(
+               Supplier.id == supplier_category.c.supplier_id,
+               Supplier.agency_id == agency_id
+             )
+          )
+          # 3) filtrăm doar după tip – fără WHERE pe agency_id!
+          .filter(Category.type == sup_type)
           .distinct()
           .order_by(Category.name)
           .all()
@@ -310,9 +330,17 @@ def update_supplier(
 
 @app.delete("/suppliers/{supplier_id}", status_code=204)
 def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
-    if not db.query(Supplier).filter_by(id=supplier_id).delete():
-        raise HTTPException(404, "Supplier not found")
-    db.commit()
+     sp = db.get(Supplier, supplier_id)
+     if not sp:
+         raise HTTPException(404, "Supplier not found")
+
+     # 1) Golește legăturile many-to-many
+     sp.categories = []
+     db.commit()
+
+     # 2) Șterge obiectul Supplier
+     db.delete(sp)
+     db.commit()
 
 @app.get("/suppliers/{supplier_id}/offerings", response_model=list[OfferingOut])
 def list_offerings(supplier_id: int, db: Session = Depends(get_db)):
