@@ -16,6 +16,7 @@ import {
   DialogContent,
   DialogActions,
   CircularProgress,
+  Autocomplete,
 } from '@mui/material';
 import AddIcon             from '@mui/icons-material/Add';
 import ExpandMoreIcon      from '@mui/icons-material/ExpandMore';
@@ -28,44 +29,82 @@ import { useCategories, useSuppliersByCat } from '../api/queries';
 
 /* ────────────────────────────────────────────────────────── */
 export default function Agency() {
-  const { id }   = useParams();           // /agency/:id
+  const { id }   = useParams();
   const agencyId = Number(id);
 
-  /* -------- state -------- */
-  const [type, setType]         = useState('material'); // material | service
+  /* -------------- state -------------- */
+  const [type, setType]         = useState('material');
   const [search, setSearch]     = useState('');
-  const [expanded, setExpanded] = useState([]);         // categoryId[]
+  const [expanded, setExpanded] = useState([]);
   const [showBack, setShowBack] = useState(false);
 
-  /* ---- dialog Add Category ---- */
-  const [openAdd, setOpenAdd]   = useState(false);
-  const [catName, setCatName]   = useState('');
+  /* dialogs */
+  const [openAddCat,  setOpenAddCat]  = useState(false);
+  const [openAddSupp, setOpenAddSupp] = useState(false);
+
+  /* form Add Category */
+  const [catName, setCatName] = useState('');
+
+  /* form Add Supplier */
+  const [supName,   setSupName]   = useState('');
+  const [supEmail,  setSupEmail]  = useState('');
+  const [supPhone,  setSupPhone]  = useState('');
+  const [supCats,   setSupCats]   = useState([]);    // [{id, name}, …]
 
   const qc = useQueryClient();
+
+  /* ---------- queries ---------- */
+  const { data: cats = [] } = useCategories(agencyId, type);
+
+  /* ---------- mutations ---------- */
   const addCategory = useMutation({
     mutationFn: async name => {
       const res = await api.post('/categories', { name, type });
       return res.data;
     },
     onSuccess: () => {
-      // Re‑fă simetric query‑ul de categorie curentă
       qc.invalidateQueries(['categories', agencyId, type]);
       setCatName('');
-      setOpenAdd(false);
+      setOpenAddCat(false);
     },
   });
 
-  const { data: cats = [] } = useCategories(agencyId, type);
+  const addSupplier = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        name: supName,
+        office_email: supEmail || null,
+        office_phone: supPhone  || null,
+        category_ids: supCats.map(c => c.id),
+        contacts:     [],                 // poți adăuga ulterior
+        offerings:    [],
+      };
+      const res = await api.post(`/agencies/${agencyId}/suppliers`, payload);
+      return res.data;
+    },
+    onSuccess: data => {
+      // 1) dacă am adăugat categorie nouă, lista de categorii e deja invalidată
+      qc.invalidateQueries(['categories', agencyId, type]);
+      // 2) invalidează toate listele de furnizori pt. categoriile selectate
+      supCats.forEach(c =>
+        qc.invalidateQueries(['suppliers', agencyId, c.id])
+      );
+      // reset formular
+      setSupName('');
+      setSupEmail('');
+      setSupPhone('');
+      setSupCats([]);
+      setOpenAddSupp(false);
+    },
+  });
 
+  /* ---------- efect background ---------- */
   useEffect(() => {
-    // când intri pe pagină → aplică background‑ul special
     document.body.classList.add('agency-bg');
-
-    // când părăseşti pagina Agency → revino la background-ul implicit
     return () => document.body.classList.remove('agency-bg');
-    }, []);
+  }, []);
 
-  /* -------- scroll “înapoi sus” -------- */
+  /* ---------- efect scroll ↑ ---------- */
   const listRef = useRef(null);
   useEffect(() => {
     const el = listRef.current;
@@ -75,53 +114,36 @@ export default function Agency() {
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
-  /* -------- helper ­funcţii -------- */
-  const isCatExpanded = catId => expanded.includes(catId);
-  const toggleExpand  = catId =>
-    setExpanded(prev =>
-      prev.includes(catId) ? prev.filter(id => id !== catId) : [...prev, catId]
-    );
+  /* ---------- helpers ---------- */
+  const isCatExpanded = id => expanded.includes(id);
+  const toggleExpand = id =>
+    setExpanded(prev => (prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]));
 
-  /* ───────────────── render ───────────────── */
+  /* ───────────────────────── render ───────────────────────── */
   return (
     <div className="AppContainer">
       <Stack
         spacing={2}
         sx={{
-          width: 450,
-          minWidth: 450,
-          flexShrink: 0,
-          flexGrow: 0,
-          height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.35)',
-          backdropFilter: 'blur(6px)',
-          color: '#fff',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
+          width: 450, minWidth: 450,
+          flexShrink: 0, height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)',
+          color: '#fff', overflow: 'hidden', display: 'flex', flexDirection: 'column',
         }}
       >
-        {/* HEADER – switch + search + ADD BTN */}
+        {/* ── HEADER ── */}
         <Box
           sx={{
-            position: 'sticky',
-            top: 4,
-            zIndex: 1,
-            pr: 2,
-            pt: 1,
-            pb: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1,
+            position: 'sticky', top: 4, zIndex: 1,
+            pr: 2, pt: 1, pb: 1,
+            display: 'flex', flexDirection: 'column', gap: 1,
           }}
         >
           <FormControlLabel
             control={
               <Switch
                 checked={type === 'service'}
-                onChange={() =>
-                  setType(prev => (prev === 'material' ? 'service' : 'material'))
-                }
+                onChange={() => setType(p => (p === 'material' ? 'service' : 'material'))}
                 color="primary"
               />
             }
@@ -129,76 +151,70 @@ export default function Agency() {
           />
 
           <TextField
-            fullWidth
-            size="small"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            fullWidth size="small"
+            value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Caută..."
             sx={{
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              borderRadius: 1,
+              backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 1,
               input: { color: '#fff' },
               '& .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
               '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
             }}
           />
 
-          {/* === NEW BUTTON “Adaugă categorie” === */}
-          <Button
-            startIcon={<AddIcon />}
-            onClick={() => setOpenAdd(true)}
-            variant="outlined"
-            sx={{
-              alignSelf: 'flex-start',
-              color: '#fff',
-              borderColor: 'rgba(255,255,255,0.6)',
-              textTransform: 'none',
-              backdropFilter: 'blur(4px)',
-              '&:hover': {
-                backgroundColor: 'rgba(255,255,255,0.12)',
-                borderColor: '#fff',
-              },
-            }}
-          >
-            Adaugă categorie
-          </Button>
+          {/* ── LINIE cu cele două BUTOANE ── */}
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              startIcon={<AddIcon />} variant="outlined"
+              onClick={() => setOpenAddCat(true)}
+              sx={{
+                color: '#fff', borderColor: 'rgba(255,255,255,0.6)', textTransform: 'none',
+                backdropFilter: 'blur(4px)',
+                '&:hover': { backgroundColor: 'rgba(255,255,255,0.12)', borderColor: '#fff' },
+              }}
+            >
+              Adaugă categorie
+            </Button>
+
+            <Button
+              startIcon={<AddIcon />} variant="contained"
+              onClick={() => setOpenAddSupp(true)}
+              sx={{
+                textTransform: 'none',
+                backgroundColor: 'rgba(255,255,255,0.25)',
+                '&:hover': { backgroundColor: 'rgba(255,255,255,0.35)' },
+              }}
+            >
+              Adaugă furnizor
+            </Button>
+          </Box>
         </Box>
 
-        {/* LISTA cu scroll propriu */}
+        {/*  LISTA cu scroll  */}
         <Box
           ref={listRef}
-          sx={{
-            flex: 1,
-            overflowY: 'auto',
-            pr: 1,
-            backgroundColor: 'transparent',
-            overflowX: 'hidden',
-          }}
+          sx={{ flex: 1, overflowY: 'auto', pr: 1, backgroundColor: 'transparent' }}
         >
           {cats
-            .filter(cat =>
-              cat.name.toLowerCase().includes(search.toLowerCase())
-            )
-            .map(cat => (
+            .filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+            .map(c => (
               <CategoryBlock
-                key={cat.id}
-                cat={cat}
-                expanded={isCatExpanded(cat.id)}
-                toggle={() => toggleExpand(cat.id)}
+                key={c.id}
+                cat={c}
+                expanded={isCatExpanded(c.id)}
+                toggle={() => toggleExpand(c.id)}
                 agencyId={agencyId}
                 search={search}
               />
             ))}
         </Box>
 
-        {/* BUTON „ÎNAPOI SUS” */}
+        {/*  ÎNAPOI SUS  */}
         {showBack && (
           <Tooltip title="Înapoi sus" arrow>
             <IconButton
               size="small"
-              onClick={() =>
-                listRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-              }
+              onClick={() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
               sx={{
                 alignSelf: 'flex-end',
                 color: '#fff',
@@ -212,28 +228,21 @@ export default function Agency() {
         )}
       </Stack>
 
-      {/* === ADD CATEGORY DIALOG === */}
+      {/* ───────────────── ADD CATEGORY DIALOG ───────────────── */}
       <Dialog
-        open={openAdd}
-        onClose={() => !addCategory.isLoading && setOpenAdd(false)}
+        open={openAddCat}
+        onClose={() => !addCategory.isLoading && setOpenAddCat(false)}
         PaperComponent={motion.div}
         PaperProps={{
-          initial: { opacity: 0, scale: 0.9 },
-          animate: { opacity: 1, scale: 1 },
-          exit:    { opacity: 0, scale: 0.9 },
+          initial:  { opacity: 0, scale: 0.9 },
+          animate:  { opacity: 1, scale: 1 },
+          exit:     { opacity: 0, scale: 0.9 },
           transition: { duration: 0.25 },
-          sx: {
-            backdropFilter: 'blur(8px)',
-            backgroundColor: 'rgba(10,10,10,0.85)',
-            px: 2, pb: 2,
-            borderRadius: 3,
-            width: 320,
-          },
+          sx: { backdropFilter: 'blur(8px)', backgroundColor: 'rgba(10,10,10,0.85)',
+                px: 2, pb: 2, borderRadius: 3, width: 320 },
         }}
       >
-        <DialogTitle sx={{ color: '#fff', pb: 1 }}>
-          Adaugă categorie ({type})
-        </DialogTitle>
+        <DialogTitle sx={{ color: '#fff', pb: 1 }}>Adaugă categorie ({type})</DialogTitle>
 
         <DialogContent>
           <TextField
@@ -242,34 +251,124 @@ export default function Agency() {
             label="Nume categorie"
             value={catName}
             onChange={e => setCatName(e.target.value)}
-            sx={{
-              mt: 1,
-              input: { color: '#fff' },
-              '& .MuiInputLabel-root': { color: '#fff' },
-              '& .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-            }}
             disabled={addCategory.isLoading}
-          />
+            InputLabelProps={{
+            sx: { color: '#fff' }
+            }}
+            InputProps={{
+            sx: { color: '#fff' }
+            }}
+            sx={{
+            mt: 1,
+            '& .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+            }}
+        />
         </DialogContent>
 
-        <DialogActions sx={{ pr: 2 }}>
+        <DialogActions sx={{ pr: 6}}>
           <Button
-            onClick={() => setOpenAdd(false)}
+            variant="outlined"
+            onClick={() => setOpenAddCat(false)}
             disabled={addCategory.isLoading}
-          >
+            sx={{
+                color: 'red',
+                borderColor: 'red',
+                textTransform: 'none',
+                '&:hover': {
+                borderColor: '#ff4444',
+                backgroundColor: 'rgba(255, 0, 0, 0.08)',
+                },
+            }}
+            >
             Anulează
-          </Button>
+            </Button>
           <Button
             variant="contained"
             onClick={() => catName && addCategory.mutate(catName)}
             disabled={addCategory.isLoading || !catName.trim()}
             startIcon={
-              addCategory.isLoading ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <AddIcon />
-              )
+              addCategory.isLoading
+                ? <CircularProgress size={16} color="inherit" />
+                : <AddIcon />
+            }
+          >
+            Salvează
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ───────────────── ADD SUPPLIER DIALOG ───────────────── */}
+      <Dialog
+        open={openAddSupp}
+        onClose={() => !addSupplier.isLoading && setOpenAddSupp(false)}
+        fullWidth maxWidth="sm"
+        PaperComponent={motion.div}
+        PaperProps={{
+          initial: { opacity: 0, scale: 0.9 },
+          animate: { opacity: 1, scale: 1 },
+          exit:    { opacity: 0, scale: 0.9 },
+          transition: { duration: 0.25 },
+          sx: { backdropFilter: 'blur(8px)', backgroundColor: 'rgba(10,10,10,0.85)', p: 3, borderRadius: 3 },
+        }}
+      >
+        <DialogTitle sx={{ color: '#fff' }}>Adaugă furnizor</DialogTitle>
+
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+          <TextField
+            label="Nume furnizor *"
+            value={supName} onChange={e => setSupName(e.target.value)}
+            sx={{ input: { color: '#fff' } }}
+          />
+          <TextField
+            label="Email"
+            value={supEmail} onChange={e => setSupEmail(e.target.value)}
+            sx={{ input: { color: '#fff' } }}
+          />
+          <TextField
+            label="Telefon"
+            value={supPhone} onChange={e => setSupPhone(e.target.value)}
+            sx={{ input: { color: '#fff' } }}
+          />
+          <Autocomplete
+            multiple
+            options={cats}
+            getOptionLabel={o => o.name}
+            value={supCats}
+            onChange={(_, v) => setSupCats(v)}
+            filterSelectedOptions
+            renderInput={params => (
+              <TextField
+                {...params}
+                label="Categorii *"
+                sx={{ input: { color: '#fff' } }}
+              />
+            )}
+            sx={{
+              '.MuiChip-root': {
+                backgroundColor: 'rgba(255,255,255,0.25)',
+                color: '#fff',
+              },
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions sx={{ pr: 2, pt: 1 }}>
+          <Button onClick={() => setOpenAddSupp(false)} disabled={addSupplier.isLoading}>
+            Anulează
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => addSupplier.mutate()}
+            disabled={
+              addSupplier.isLoading ||
+              !supName.trim() ||
+              supCats.length === 0
+            }
+            startIcon={
+              addSupplier.isLoading
+                ? <CircularProgress size={16} color="inherit" />
+                : <AddIcon />
             }
           >
             Salvează
@@ -289,40 +388,18 @@ function CategoryBlock({ cat, expanded, toggle, agencyId, search }) {
   );
 
   return (
-    <Box
-      sx={{
-        mb: 2,
-        p: 1,
-        border: '1px solid #888',
-        borderRadius: 1,
-        backgroundColor: 'transparent',
-      }}
-    >
-      {/* header categorie */}
+    <Box sx={{ mb: 2, p: 1, border: '1px solid #888', borderRadius: 1 }}>
+      {/* header */}
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <Box
           onClick={toggle}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            cursor: 'pointer',
-            flex: 1,
-            minWidth: 0,
-          }}
+          sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flex: 1, minWidth: 0 }}
         >
           <IconButton size="small" sx={{ color: '#fff', flexShrink: 0 }}>
             {expanded ? <ExpandMoreIcon /> : <ChevronRightIcon />}
           </IconButton>
 
-          <Typography
-            sx={{
-              ml: 1,
-              pr: 1,
-              fontWeight: 600,
-              whiteSpace: 'normal',
-              overflowWrap: 'anywhere',
-            }}
-          >
+          <Typography sx={{ ml: 1, pr: 1, fontWeight: 600, overflowWrap: 'anywhere' }}>
             {cat.name}
           </Typography>
         </Box>
@@ -340,10 +417,8 @@ function CategoryBlock({ cat, expanded, toggle, agencyId, search }) {
             <Box
               key={s.id}
               sx={{
-                mt: 0.5,
-                p: 0.5,
-                cursor: 'pointer',
-                borderRadius: 1,
+                mt: 0.5, p: 0.5,
+                cursor: 'pointer', borderRadius: 1,
                 '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
               }}
             >
