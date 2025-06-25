@@ -13,3 +13,19 @@ body {
   background-size: cover;
   background-attachment: fixed;
 }
+
+body.agency-bg {
+  background-image: url('/src/assets/background2.png') !important;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+.AppContainer{
+  display:flex;
+  width:100%;
+  height:100%;
+  align-items:center;   /* vertical centre */
+  justify-content:flex-end; /* lipit de dreapta */
+}
