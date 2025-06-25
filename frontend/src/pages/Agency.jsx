@@ -50,6 +50,18 @@ export default function Agency() {
   const [supEmail,  setSupEmail]  = useState('');
   const [supPhone,  setSupPhone]  = useState('');
   const [supCats,   setSupCats]   = useState([]);    // [{id, name}, …]
+  const textInputSX = {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    '& .MuiInputLabel-root':            { color: '#fff' },
+    '& .MuiInputLabel-root.Mui-focused':{ color: 'primary.main' },
+    '& .MuiInputBase-input':            { color: '#fff' },
+    '& .MuiInputBase-input::placeholder': { color: '#fff', opacity: 1 },
+    '& .MuiOutlinedInput-root': {
+        '& fieldset':              { borderColor: '#fff' },
+        '&:hover fieldset':        { borderColor: '#fff' },
+        '&.Mui-focused fieldset':  { borderColor: 'primary.main' },
+    },
+    };
 
   const qc = useQueryClient();
 
@@ -315,21 +327,24 @@ export default function Agency() {
         <DialogTitle sx={{ color: '#fff' }}>Adaugă furnizor</DialogTitle>
 
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-          <TextField
+           <TextField
             label="Nume furnizor *"
-            value={supName} onChange={e => setSupName(e.target.value)}
-            sx={{ input: { color: '#fff' } }}
-          />
+            value={supName}
+            onChange={e => setSupName(e.target.value)}
+            sx={textInputSX}
+            />
           <TextField
             label="Email"
-            value={supEmail} onChange={e => setSupEmail(e.target.value)}
-            sx={{ input: { color: '#fff' } }}
-          />
+            value={supEmail}
+            onChange={e => setSupEmail(e.target.value)}
+            sx={textInputSX}
+            />
           <TextField
             label="Telefon"
-            value={supPhone} onChange={e => setSupPhone(e.target.value)}
-            sx={{ input: { color: '#fff' } }}
-          />
+            value={supPhone}
+            onChange={e => setSupPhone(e.target.value)}
+            sx={textInputSX}
+            />
           <Autocomplete
             multiple
             options={cats}
@@ -338,11 +353,11 @@ export default function Agency() {
             onChange={(_, v) => setSupCats(v)}
             filterSelectedOptions
             renderInput={params => (
-              <TextField
+            <TextField
                 {...params}
                 label="Categorii *"
-                sx={{ input: { color: '#fff' } }}
-              />
+                sx={textInputSX}
+            />
             )}
             sx={{
               '.MuiChip-root': {
