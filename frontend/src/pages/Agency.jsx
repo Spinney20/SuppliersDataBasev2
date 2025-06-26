@@ -17,6 +17,7 @@ import {
   DialogActions,
   CircularProgress,
   Autocomplete,
+  ButtonGroup,
 } from '@mui/material';
 import AddIcon             from '@mui/icons-material/Add';
 import ExpandMoreIcon      from '@mui/icons-material/ExpandMore';
@@ -27,6 +28,8 @@ import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../api/axios';
 import { useCategories, useSuppliersByCat } from '../api/queries';
 import RemoveIcon from '@mui/icons-material/Remove';
+import ConstructionIcon from '@mui/icons-material/Construction';
+import EngineeringIcon from '@mui/icons-material/Engineering';
 
 
 /* ────────────────────────────────────────────────────────── */
@@ -159,16 +162,114 @@ export default function Agency() {
             display: 'flex', flexDirection: 'column', gap: 1,
           }}
         >
-          <FormControlLabel
-            control={
-              <Switch
-                checked={type === 'service'}
-                onChange={() => setType(p => (p === 'material' ? 'service' : 'material'))}
-                color="primary"
-              />
-            }
-            label={type === 'material' ? 'Materiale' : 'Servicii'}
-          />
+          <ButtonGroup 
+            variant="contained" 
+            fullWidth
+            sx={{ 
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              borderRadius: 1,
+              '& .MuiButtonGroup-grouped': {
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.9rem',
+                py: 0.75,
+                transition: 'all 0.3s ease-in-out',
+              }
+            }}
+          >
+            <Button 
+              onClick={() => setType('material')}
+              sx={{
+                flex: type === 'material' ? 1.2 : 0.8,
+                backgroundColor: type === 'material' ? 'primary.main' : 'rgba(255,255,255,0.1)',
+                color: '#fff',
+                py: type === 'material' ? '0.8rem' : '0.6rem',
+                position: 'relative',
+                overflow: 'hidden',
+                zIndex: type === 'material' ? 2 : 1,
+                boxShadow: type === 'material' ? '0px 4px 8px rgba(0,0,0,0.25)' : 'none',
+                transform: type === 'material' ? 'scale(1.05)' : 'scale(1)',
+                '&:hover': { 
+                  backgroundColor: type === 'material' ? 'primary.dark' : 'rgba(255,255,255,0.2)',
+                  transform: type === 'material' ? 'scale(1.05)' : 'scale(1.02)',
+                },
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 50%)',
+                  opacity: type === 'material' ? 1 : 0,
+                  transition: 'opacity 0.3s ease',
+                }
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ConstructionIcon sx={{ 
+                  fontSize: type === 'material' ? 28 : 20,
+                  transition: 'all 0.3s ease-in-out',
+                }} />
+                <Typography 
+                  sx={{ 
+                    fontSize: type === 'material' ? 18 : 14,
+                    fontWeight: type === 'material' ? 700 : 400,
+                    letterSpacing: type === 'material' ? 0.5 : 0,
+                    transition: 'all 0.3s ease-in-out',
+                  }}
+                >
+                  Materiale
+                </Typography>
+              </Box>
+            </Button>
+            <Button 
+              onClick={() => setType('service')}
+              sx={{
+                flex: type === 'service' ? 1.2 : 0.8,
+                backgroundColor: type === 'service' ? 'primary.main' : 'rgba(255,255,255,0.1)',
+                color: '#fff',
+                py: type === 'service' ? '0.8rem' : '0.6rem',
+                position: 'relative',
+                overflow: 'hidden',
+                zIndex: type === 'service' ? 2 : 1,
+                boxShadow: type === 'service' ? '0px 4px 8px rgba(0,0,0,0.25)' : 'none',
+                transform: type === 'service' ? 'scale(1.05)' : 'scale(1)',
+                '&:hover': { 
+                  backgroundColor: type === 'service' ? 'primary.dark' : 'rgba(255,255,255,0.2)',
+                  transform: type === 'service' ? 'scale(1.05)' : 'scale(1.02)',
+                },
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 50%)',
+                  opacity: type === 'service' ? 1 : 0,
+                  transition: 'opacity 0.3s ease',
+                }
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <EngineeringIcon sx={{ 
+                  fontSize: type === 'service' ? 28 : 20,
+                  transition: 'all 0.3s ease-in-out',
+                }} />
+                <Typography 
+                  sx={{ 
+                    fontSize: type === 'service' ? 18 : 14,
+                    fontWeight: type === 'service' ? 700 : 400,
+                    letterSpacing: type === 'service' ? 0.5 : 0,
+                    transition: 'all 0.3s ease-in-out',
+                  }}
+                >
+                  Servicii
+                </Typography>
+              </Box>
+            </Button>
+          </ButtonGroup>
 
           <TextField
             fullWidth size="small"
