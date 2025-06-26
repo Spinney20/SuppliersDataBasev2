@@ -26,6 +26,8 @@ import { motion }          from 'framer-motion';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../api/axios';
 import { useCategories, useSuppliersByCat } from '../api/queries';
+import RemoveIcon from '@mui/icons-material/Remove';
+
 
 /* ────────────────────────────────────────────────────────── */
 export default function Agency() {
@@ -62,6 +64,22 @@ export default function Agency() {
         '&.Mui-focused fieldset':  { borderColor: 'primary.main' },
     },
     };
+    /* --------------- form Add Supplier --------------- */
+  const [supContacts, setSupContacts] = useState([
+    { full_name: '', email: '', phone: '' }
+  ]);
+  const [supOfferings, setSupOfferings] = useState([]); // ['balast', 'nisip', ...]
+
+  const updateContact = (idx, key, val) =>
+    setSupContacts(arr =>
+      arr.map((c, i) => (i === idx ? { ...c, [key]: val } : c))
+    );
+  
+  const addContactRow    = () => setSupContacts(arr => [...arr, { full_name:'', email:'', phone:'' }]);
+  const removeContactRow = idx =>
+    setSupContacts(arr => arr.length === 1 ? arr : arr.filter((_, i) => i !== idx));
+  
+
 
   const qc = useQueryClient();
 
@@ -82,18 +100,6 @@ export default function Agency() {
   });
 
   const addSupplier = useMutation({
-    mutationFn: async () => {
-      const payload = {
-        name: supName,
-        office_email: supEmail || null,
-        office_phone: supPhone  || null,
-        category_ids: supCats.map(c => c.id),
-        contacts:     [],                 // poți adăuga ulterior
-        offerings:    [],
-      };
-      const res = await api.post(`/agencies/${agencyId}/suppliers`, payload);
-      return res.data;
-    },
     onSuccess: data => {
       // 1) dacă am adăugat categorie nouă, lista de categorii e deja invalidată
       qc.invalidateQueries(['categories', agencyId, type]);
@@ -106,6 +112,8 @@ export default function Agency() {
       setSupEmail('');
       setSupPhone('');
       setSupCats([]);
+      setSupContacts([{ full_name:'', email:'', phone:'' }]);
+      setSupOfferings([]);
       setOpenAddSupp(false);
     },
   });
@@ -326,47 +334,68 @@ export default function Agency() {
       >
         <DialogTitle sx={{ color: '#fff' }}>Adaugă furnizor</DialogTitle>
 
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-           <TextField
-            label="Nume furnizor *"
-            value={supName}
-            onChange={e => setSupName(e.target.value)}
-            sx={textInputSX}
-            />
-          <TextField
-            label="Email"
-            value={supEmail}
-            onChange={e => setSupEmail(e.target.value)}
-            sx={textInputSX}
-            />
-          <TextField
-            label="Telefon"
-            value={supPhone}
-            onChange={e => setSupPhone(e.target.value)}
-            sx={textInputSX}
-            />
-          <Autocomplete
-            multiple
-            options={cats}
-            getOptionLabel={o => o.name}
-            value={supCats}
-            onChange={(_, v) => setSupCats(v)}
-            filterSelectedOptions
-            renderInput={params => (
-            <TextField
-                {...params}
-                label="Categorii *"
-                sx={textInputSX}
-            />
-            )}
-            sx={{
-              '.MuiChip-root': {
-                backgroundColor: 'rgba(255,255,255,0.25)',
-                color: '#fff',
-              },
-            }}
-          />
-        </DialogContent>
+        <DialogContent sx={{ display:'flex', flexDirection:'column', gap:2, mt:1 }}>
+        {/* --- date generale furnizor --- */}
+        <TextField label="Nume furnizor *" value={supName}
+                  onChange={e=>setSupName(e.target.value)}
+                  placeholder="Nume furnizor *" sx={textInputSX} />
+        <TextField label="Email" value={supEmail}
+                  onChange={e=>setSupEmail(e.target.value)}
+                  placeholder="Email" sx={textInputSX} />
+        <TextField label="Telefon" value={supPhone}
+                  onChange={e=>setSupPhone(e.target.value)}
+                  placeholder="Telefon" sx={textInputSX} />
+
+        <Autocomplete  /* categorii */
+          multiple options={cats} value={supCats}
+          getOptionLabel={o=>o.name} filterSelectedOptions
+          onChange={(_,v)=>setSupCats(v)}
+          renderInput={params=>(
+            <TextField {...params} label="Categorii *" placeholder="Categorii *" sx={textInputSX}/>
+          )}
+          sx={{ '.MuiChip-root':{ backgroundColor:'rgba(255,255,255,0.25)', color:'#fff' }}} />
+
+        {/* ---------- Contacte ---------- */}
+        <Typography sx={{mt:1,fontWeight:600}}>Contacte</Typography>
+        {supContacts.map((c,idx)=>(
+          <Box key={idx} sx={{display:'flex',gap:1}}>
+            <TextField fullWidth label="Nume *"
+                      value={c.full_name}
+                      onChange={e=>updateContact(idx,'full_name',e.target.value)}
+                      sx={{...textInputSX, flex:1}} />
+            <TextField label="Email"
+                      value={c.email}
+                      onChange={e=>updateContact(idx,'email',e.target.value)}
+                      sx={{...textInputSX, width:170}} />
+            <TextField label="Telefon"
+                      value={c.phone}
+                      onChange={e=>updateContact(idx,'phone',e.target.value)}
+                      sx={{...textInputSX, width:120}} />
+            <IconButton size="small" onClick={()=>removeContactRow(idx)}
+                        sx={{color:'#fff',alignSelf:'center'}}>
+              <RemoveIcon fontSize="inherit" />
+            </IconButton>
+          </Box>
+        ))}
+        <Button onClick={addContactRow} startIcon={<AddIcon/>}
+                sx={{alignSelf:'flex-start', color:'#fff', textTransform:'none'}}>
+          Adaugă contact
+        </Button>
+
+        {/* ---------- Offerings ---------- */}
+        <Typography sx={{mt:1,fontWeight:600}}>Offerings ({type})</Typography>
+        <Autocomplete
+          multiple freeSolo
+          options={[]} value={supOfferings}
+          onChange={(_,v)=>setSupOfferings(v)}
+          renderInput={params=>(
+            <TextField {...params} label="Materiale / Servicii"
+                      placeholder="Tastează şi Enter"
+                      sx={textInputSX}/>
+          )}
+          sx={{ '.MuiChip-root':{ backgroundColor:'rgba(255,255,255,0.25)', color:'#fff' }}} />
+      </DialogContent>
+
 
         <DialogActions sx={{ pr: 2, pt: 1 }}>
           <Button onClick={() => setOpenAddSupp(false)} disabled={addSupplier.isLoading}>
