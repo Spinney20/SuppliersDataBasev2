@@ -30,6 +30,38 @@ import { useCategories, useSuppliersByCat } from '../api/queries';
 import RemoveIcon from '@mui/icons-material/Remove';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import EngineeringIcon from '@mui/icons-material/Engineering';
+import { styled, alpha } from '@mui/material/styles';
+
+// Containerul cu cele două butoane
+const ButtonContainer = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  width: '100%',
+  gap: theme.spacing(2),
+  marginTop: theme.spacing(1),
+}));
+
+// Buton reutilizabil, variantă profesională
+const ActionButton = styled(Button)(({ theme }) => ({
+  flex: 1,
+  minHeight: 38,
+  borderRadius: theme.shape.borderRadius,       // puțin rotunjit
+  textTransform: 'none',
+  fontWeight: theme.typography.fontWeightMedium,
+  fontSize: theme.typography.pxToRem(14),
+  letterSpacing: '0.25px',
+  transition: theme.transitions.create(
+    ['background-color', 'transform', 'box-shadow'],
+    { duration: theme.transitions.duration.shortest }
+  ),
+  boxShadow: '0 1px 3px rgba(0,0,0,0.12)',        // umbră fină
+  '&:hover': {
+    transform: 'scale(1.02)',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.16)',
+  },
+  '&:focus': {
+    boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.3)}`,
+  },
+}));
 
 
 /* ────────────────────────────────────────────────────────── */
@@ -159,7 +191,7 @@ export default function Agency() {
           sx={{
             position: 'sticky', top: 4, zIndex: 1,
             pr: 2, pt: 1, pb: 1,
-            display: 'flex', flexDirection: 'column', gap: 1,
+            display: 'flex', flexDirection: 'column', gap: 0.5,
           }}
         >
           <ButtonGroup 
@@ -206,7 +238,7 @@ export default function Agency() {
                 }
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <ConstructionIcon sx={{ 
                   fontSize: type === 'material' ? 28 : 20,
                   transition: 'all 0.3s ease-in-out',
@@ -252,7 +284,7 @@ export default function Agency() {
                 }
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <EngineeringIcon sx={{ 
                   fontSize: type === 'service' ? 28 : 20,
                   transition: 'all 0.3s ease-in-out',
@@ -272,43 +304,79 @@ export default function Agency() {
           </ButtonGroup>
 
           <TextField
-            fullWidth size="small"
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Caută..."
+            fullWidth
+            size="small"
+            variant="outlined"              // folosește variant‑ul outlined cu floating label
+            label="Caută..."               // mutăm textul în label
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            InputLabelProps={{
+              shrink: !!search,            // dacă există text, forțează label sus
+              sx: {
+                color: '#fff',
+                '&.Mui-focused': {
+                  color: '#fff',   // culoarea label‑ului la focus
+                },
+              },
+            }}
             sx={{
-              backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 1,
-              input: { color: '#fff' },
-              '& .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              borderRadius: 1,
+              mt: 1,
+
+              // contur outline
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': {
+                  borderColor: '#fff',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#fff',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: 'primary.main',
+                },
+              },
+
+              // textul din interior
+              '& .MuiInputBase-input': {
+                color: '#fff',
+              },
             }}
           />
 
-          {/* ── LINIE cu cele două BUTOANE ── */}
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              startIcon={<AddIcon />} variant="outlined"
-              onClick={() => setOpenAddCat(true)}
-              sx={{
-                color: '#fff', borderColor: 'rgba(255,255,255,0.6)', textTransform: 'none',
-                backdropFilter: 'blur(4px)',
-                '&:hover': { backgroundColor: 'rgba(255,255,255,0.12)', borderColor: '#fff' },
-              }}
-            >
-              Adaugă categorie
-            </Button>
+          {/* ── LINIE cu cele două BUTOANE PROFESIONISTE ── */}
+        <ButtonContainer>
+          <ActionButton
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenAddSupp(true)}
+          >
+            Adaugă furnizor
+          </ActionButton>
 
-            <Button
-              startIcon={<AddIcon />} variant="contained"
-              onClick={() => setOpenAddSupp(true)}
-              sx={{
-                textTransform: 'none',
-                backgroundColor: 'rgba(255,255,255,0.25)',
-                '&:hover': { backgroundColor: 'rgba(255,255,255,0.35)' },
-              }}
-            >
-              Adaugă furnizor
-            </Button>
-          </Box>
+          <ActionButton
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenAddCat(true)}
+            sx={{
+              color: '#fff',                // text alb
+              borderColor: '#fff',          // bordură albă
+              '&:hover': {
+                borderColor: '#fff',        // rămâne albă la hover
+                backgroundColor: 'rgba(255,255,255,0.1)', // ușoară umbră albă
+              },
+              '&:focus': {
+                borderColor: '#fff',
+                backgroundColor: 'rgba(255,255,255,0.15)',
+              },
+            }}
+          >
+            Adaugă categorie
+          </ActionButton>
+        </ButtonContainer>
+
+
         </Box>
 
         {/*  LISTA cu scroll  */}
