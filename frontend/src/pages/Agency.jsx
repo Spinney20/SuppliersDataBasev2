@@ -1,6 +1,6 @@
 // src/pages/Agency.jsx
 import { useParams } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import {
   Box,
   Stack,
@@ -31,6 +31,15 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import { styled, alpha } from '@mui/material/styles';
+import BusinessIcon from '@mui/icons-material/Business';
+import EmailIcon from '@mui/icons-material/Email';
+import PhoneIcon from '@mui/icons-material/Phone';
+import CategoryIcon from '@mui/icons-material/Category';
+import PersonIcon from '@mui/icons-material/Person';
+import InventoryIcon from '@mui/icons-material/Inventory';
+import SaveIcon from '@mui/icons-material/Save';
+import CancelIcon from '@mui/icons-material/Cancel';
+import React from 'react';
 
 // Containerul cu cele două butoane
 const ButtonContainer = styled(Box)(({ theme }) => ({
@@ -63,6 +72,395 @@ const ActionButton = styled(Button)(({ theme }) => ({
   },
 }));
 
+// Adaugă un stil pentru scrollbar modern
+const StyledDialogContent = styled(DialogContent)(({ theme }) => ({
+  '&::-webkit-scrollbar': {
+    width: '8px',
+  },
+  '&::-webkit-scrollbar-track': {
+    background: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: '4px',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    background: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: '4px',
+    '&:hover': {
+      background: 'rgba(255, 255, 255, 0.3)',
+    },
+  },
+  maxHeight: 'calc(100vh - 200px)',
+  overflowY: 'auto',
+}));
+
+// Stiluri pentru scrollbar-ul din lista de categorii
+const scrollbarStyles = {
+  '&::-webkit-scrollbar': {
+    width: '8px',
+  },
+  '&::-webkit-scrollbar-track': {
+    background: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: '4px',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    background: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: '4px',
+    '&:hover': {
+      background: 'rgba(255, 255, 255, 0.3)',
+    },
+  },
+};
+
+// Componentă separată pentru câmpurile de input cu icon
+const IconTextField = memo(({ icon, textInputSX, ...props }) => (
+  <TextField
+    {...props}
+    autoComplete="off"
+    InputProps={{
+      startAdornment: (
+        <Box sx={{ color: 'rgba(255,255,255,0.7)', mr: 1, display: 'flex' }}>
+          {icon}
+        </Box>
+      ),
+      sx: { color: '#fff' }
+    }}
+    InputLabelProps={{
+      shrink: true,
+      sx: {
+        color: '#fff',
+        '&.Mui-focused': {
+          color: 'primary.main',
+        },
+      }
+    }}
+    sx={{
+      ...textInputSX,
+      ...props.sx
+    }}
+    variant="outlined"
+  />
+));
+
+/* ────────────────────────────────────────────────────────── */
+// Componentă separată pentru formularul de furnizor
+const SupplierForm = memo(({ 
+  supplierForm, 
+  updateSupplierField, 
+  updateSupplierContact,
+  addSupplierContactRow,
+  removeSupplierContactRow,
+  cats,
+  textInputSX,
+  type
+}) => {
+  return (
+    <>
+      {/* --- date generale furnizor --- */}
+      <Box sx={{ 
+        backgroundColor: 'rgba(255,255,255,0.03)', 
+        p: 2, 
+        borderRadius: 2,
+        border: '1px solid rgba(255,255,255,0.05)',
+        mb: 1
+      }}>
+        <Typography variant="subtitle2" sx={{ 
+          mb: 2, 
+          opacity: 0.9, 
+          fontWeight: 500,
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          pb: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          color: 'primary.main'
+        }}>
+          <BusinessIcon fontSize="small" color="primary" /> Informații generale
+        </Typography>
+        
+        <IconTextField 
+          icon={<BusinessIcon />}
+          label="Nume furnizor *" 
+          value={supplierForm.name}
+          onChange={e => updateSupplierField('name', e.target.value)}
+          fullWidth
+          sx={{ mb: 2 }}
+          placeholder=""
+          textInputSX={textInputSX}
+        />
+        
+        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          <IconTextField 
+            icon={<EmailIcon />}
+            label="Email" 
+            value={supplierForm.email}
+            onChange={e => updateSupplierField('email', e.target.value)}
+            fullWidth
+            placeholder=""
+            textInputSX={textInputSX}
+          />
+          
+          <IconTextField 
+            icon={<PhoneIcon />}
+            label="Telefon" 
+            value={supplierForm.phone}
+            onChange={e => updateSupplierField('phone', e.target.value)}
+            fullWidth
+            placeholder=""
+            textInputSX={textInputSX}
+          />
+        </Box>
+
+        <Autocomplete  /* categorii */
+          multiple 
+          options={cats} 
+          value={supplierForm.categories}
+          getOptionLabel={o=>o.name} 
+          filterSelectedOptions
+          onChange={(_,v)=>updateSupplierField('categories', v)}
+          disableCloseOnSelect
+          limitTags={5}
+          ListboxProps={{
+            style: {
+              maxHeight: '200px',
+            }
+          }}
+          renderInput={params=>(
+            <TextField 
+              {...params} 
+              label="Categorii *" 
+              placeholder=""
+              sx={textInputSX}
+              variant="outlined"
+              autoComplete="off"
+              InputLabelProps={{
+                shrink: true,
+                sx: {
+                  color: '#fff',
+                  '&.Mui-focused': {
+                    color: 'primary.main',
+                  },
+                }
+              }}
+              InputProps={{
+                ...params.InputProps,
+                startAdornment: (
+                  <>
+                    <Box sx={{ color: 'rgba(255,255,255,0.7)', mr: 1, display: 'flex' }}>
+                      <CategoryIcon />
+                    </Box>
+                    {params.InputProps.startAdornment}
+                  </>
+                )
+              }}
+            />
+          )}
+          sx={{ 
+            '.MuiChip-root': { 
+              backgroundColor: 'rgba(255,255,255,0.15)', 
+              color: '#fff',
+              borderRadius: '16px',
+              '& .MuiChip-deleteIcon': {
+                color: 'rgba(255,255,255,0.7)',
+                '&:hover': {
+                  color: '#fff'
+                }
+              }
+            },
+            '.MuiAutocomplete-listbox': scrollbarStyles,
+            '.MuiAutocomplete-endAdornment': {
+              top: 'calc(50% - 14px)'
+            }
+          }} 
+        />
+      </Box>
+
+      {/* ---------- Contacte ---------- */}
+      <Box sx={{ 
+        backgroundColor: 'rgba(255,255,255,0.03)', 
+        p: 2, 
+        borderRadius: 2,
+        border: '1px solid rgba(255,255,255,0.05)',
+        mb: 1
+      }}>
+        <Typography sx={{
+          fontWeight: 500,
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          pb: 1,
+          mb: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          color: 'primary.main'
+        }}>
+          <PersonIcon fontSize="small" color="primary" /> Contacte
+        </Typography>
+        
+        {supplierForm.contacts.map((c,idx)=>(
+          <Box key={idx} sx={{
+            display: 'flex',
+            gap: 2,
+            mb: 2,
+            p: 2,
+            borderRadius: 1,
+            backgroundColor: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(255,255,255,0.03)',
+          }}>
+            <IconTextField 
+              icon={<PersonIcon />}
+              fullWidth 
+              label="Nume *"
+              value={c.full_name}
+              onChange={e=>updateSupplierContact(idx,'full_name',e.target.value)}
+              sx={{flex:1}}
+              placeholder=""
+              textInputSX={textInputSX}
+            />
+            <IconTextField 
+              icon={<EmailIcon />}
+              label="Email"
+              value={c.email}
+              onChange={e=>updateSupplierContact(idx,'email',e.target.value)}
+              sx={{width:200}}
+              placeholder=""
+              textInputSX={textInputSX}
+            />
+            <IconTextField 
+              icon={<PhoneIcon />}
+              label="Telefon"
+              value={c.phone}
+              onChange={e=>updateSupplierContact(idx,'phone',e.target.value)}
+              sx={{width:150}}
+              placeholder=""
+              textInputSX={textInputSX}
+            />
+            <IconButton 
+              size="small" 
+              onClick={()=>removeSupplierContactRow(idx)}
+              sx={{
+                color:'#fff',
+                alignSelf:'center',
+                backgroundColor: 'rgba(255,0,0,0.1)',
+                '&:hover': {
+                  backgroundColor: 'rgba(255,0,0,0.2)',
+                }
+              }}
+            >
+              <RemoveIcon fontSize="inherit" />
+            </IconButton>
+          </Box>
+        ))}
+        
+        <Button 
+          onClick={addSupplierContactRow} 
+          startIcon={<AddIcon/>}
+          variant="outlined"
+          size="small"
+          sx={{
+            alignSelf:'flex-start', 
+            color:'#fff', 
+            textTransform:'none',
+            borderColor: 'rgba(255,255,255,0.3)',
+            '&:hover': {
+              borderColor: '#fff',
+              backgroundColor: 'rgba(255,255,255,0.05)'
+            }
+          }}
+        >
+          Adaugă contact
+        </Button>
+      </Box>
+
+      {/* ---------- Offerings ---------- */}
+      <Box sx={{ 
+        backgroundColor: 'rgba(255,255,255,0.03)', 
+        p: 2, 
+        borderRadius: 2,
+        border: '1px solid rgba(255,255,255,0.05)'
+      }}>
+        <Typography sx={{
+          fontWeight: 500,
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          pb: 1,
+          mb: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          color: 'primary.main'
+        }}>
+          <InventoryIcon fontSize="small" color="primary" /> Offerings ({type})
+        </Typography>
+        
+        <Autocomplete
+          multiple 
+          freeSolo
+          options={[]} 
+          value={supplierForm.offerings}
+          onChange={(_,v)=>updateSupplierField('offerings', v)}
+          disableCloseOnSelect
+          limitTags={5}
+          ListboxProps={{
+            style: {
+              maxHeight: '200px',
+            }
+          }}
+          renderInput={params=>(
+            <TextField 
+              {...params} 
+              label="Materiale / Servicii"
+              placeholder="Tastează şi Enter"
+              sx={textInputSX}
+              variant="outlined"
+              autoComplete="off"
+              InputLabelProps={{
+                shrink: true,
+                sx: {
+                  color: '#fff',
+                  '&.Mui-focused': {
+                    color: 'primary.main',
+                  },
+                }
+              }}
+              InputProps={{
+                ...params.InputProps,
+                startAdornment: (
+                  <>
+                    <Box sx={{ color: 'rgba(255,255,255,0.7)', mr: 1, display: 'flex' }}>
+                      <InventoryIcon />
+                    </Box>
+                    {params.InputProps.startAdornment}
+                  </>
+                )
+              }}
+            />
+          )}
+          sx={{ 
+            '.MuiChip-root': { 
+              backgroundColor: 'rgba(255,255,255,0.15)', 
+              color: '#fff',
+              borderRadius: '16px',
+              '& .MuiChip-deleteIcon': {
+                color: 'rgba(255,255,255,0.7)',
+                '&:hover': {
+                  color: '#fff'
+                }
+              }
+            },
+            '.MuiAutocomplete-listbox': scrollbarStyles,
+            '.MuiAutocomplete-endAdornment': {
+              top: 'calc(50% - 14px)'
+            }
+          }} 
+        />
+      </Box>
+    </>
+  );
+}, (prevProps, nextProps) => {
+  // Comparăm doar proprietățile care ar trebui să declanșeze o rerenederizare
+  return (
+    prevProps.supplierForm === nextProps.supplierForm &&
+    prevProps.cats === nextProps.cats &&
+    prevProps.type === nextProps.type
+  );
+});
 
 /* ────────────────────────────────────────────────────────── */
 export default function Agency() {
@@ -83,10 +481,65 @@ export default function Agency() {
   const [catName, setCatName] = useState('');
 
   /* form Add Supplier */
-  const [supName,   setSupName]   = useState('');
-  const [supEmail,  setSupEmail]  = useState('');
-  const [supPhone,  setSupPhone]  = useState('');
-  const [supCats,   setSupCats]   = useState([]);    // [{id, name}, …]
+  const [supplierForm, setSupplierForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    categories: [],
+    contacts: [{ full_name: '', email: '', phone: '' }],
+    offerings: []
+  });
+
+  // Funcții pentru actualizarea formularului de furnizor
+  const updateSupplierField = useCallback((field, value) => {
+    setSupplierForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  }, []);
+
+  const updateSupplierContact = useCallback((idx, key, val) => {
+    setSupplierForm(prev => {
+      const newContacts = [...prev.contacts];
+      newContacts[idx] = {
+        ...newContacts[idx],
+        [key]: val
+      };
+      return {
+        ...prev,
+        contacts: newContacts
+      };
+    });
+  }, []);
+
+  const addSupplierContactRow = useCallback(() => {
+    setSupplierForm(prev => ({
+      ...prev,
+      contacts: [...prev.contacts, { full_name: '', email: '', phone: '' }]
+    }));
+  }, []);
+
+  const removeSupplierContactRow = useCallback((idx) => {
+    setSupplierForm(prev => {
+      if (prev.contacts.length === 1) return prev;
+      return {
+        ...prev,
+        contacts: prev.contacts.filter((_, i) => i !== idx)
+      };
+    });
+  }, []);
+
+  const resetSupplierForm = useCallback(() => {
+    setSupplierForm({
+      name: '',
+      email: '',
+      phone: '',
+      categories: [],
+      contacts: [{ full_name: '', email: '', phone: '' }],
+      offerings: []
+    });
+  }, []);
+
   const textInputSX = {
     backgroundColor: 'rgba(255,255,255,0.05)',
     '& .MuiInputLabel-root':            { color: '#fff' },
@@ -98,24 +551,11 @@ export default function Agency() {
         '&:hover fieldset':        { borderColor: '#fff' },
         '&.Mui-focused fieldset':  { borderColor: 'primary.main' },
     },
-    };
-    /* --------------- form Add Supplier --------------- */
-  const [supContacts, setSupContacts] = useState([
-    { full_name: '', email: '', phone: '' }
-  ]);
-  const [supOfferings, setSupOfferings] = useState([]); // ['balast', 'nisip', ...]
-
-  const updateContact = (idx, key, val) =>
-    setSupContacts(arr =>
-      arr.map((c, i) => (i === idx ? { ...c, [key]: val } : c))
-    );
+    '& .MuiInputLabel-shrink': {
+        transform: 'translate(14px, -9px) scale(0.75)',
+    }
+  };
   
-  const addContactRow    = () => setSupContacts(arr => [...arr, { full_name:'', email:'', phone:'' }]);
-  const removeContactRow = idx =>
-    setSupContacts(arr => arr.length === 1 ? arr : arr.filter((_, i) => i !== idx));
-  
-
-
   const qc = useQueryClient();
 
   /* ---------- queries ---------- */
@@ -135,20 +575,27 @@ export default function Agency() {
   });
 
   const addSupplier = useMutation({
+    mutationFn: async () => {
+      const data = {
+        name: supplierForm.name,
+        email: supplierForm.email,
+        phone: supplierForm.phone,
+        categories: supplierForm.categories.map(c => c.id),
+        contacts: supplierForm.contacts.filter(c => c.full_name.trim()),
+        offerings: supplierForm.offerings
+      };
+      const res = await api.post('/suppliers', data);
+      return res.data;
+    },
     onSuccess: data => {
       // 1) dacă am adăugat categorie nouă, lista de categorii e deja invalidată
       qc.invalidateQueries(['categories', agencyId, type]);
       // 2) invalidează toate listele de furnizori pt. categoriile selectate
-      supCats.forEach(c =>
+      supplierForm.categories.forEach(c =>
         qc.invalidateQueries(['suppliers', agencyId, c.id])
       );
       // reset formular
-      setSupName('');
-      setSupEmail('');
-      setSupPhone('');
-      setSupCats([]);
-      setSupContacts([{ full_name:'', email:'', phone:'' }]);
-      setSupOfferings([]);
+      resetSupplierForm();
       setOpenAddSupp(false);
     },
   });
@@ -491,83 +938,68 @@ export default function Agency() {
       <Dialog
         open={openAddSupp}
         onClose={() => !addSupplier.isLoading && setOpenAddSupp(false)}
-        fullWidth maxWidth="sm"
+        fullWidth maxWidth="md"
         PaperComponent={motion.div}
         PaperProps={{
           initial: { opacity: 0, scale: 0.9 },
           animate: { opacity: 1, scale: 1 },
           exit:    { opacity: 0, scale: 0.9 },
           transition: { duration: 0.25 },
-          sx: { backdropFilter: 'blur(8px)', backgroundColor: 'rgba(10,10,10,0.85)', p: 3, borderRadius: 3 },
+          sx: { 
+            backdropFilter: 'blur(8px)', 
+            backgroundColor: 'rgba(10,10,10,0.85)', 
+            borderRadius: 3,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            overflow: 'hidden',
+            width: '800px',
+            maxWidth: '90vw'
+          },
         }}
       >
-        <DialogTitle sx={{ color: '#fff' }}>Adaugă furnizor</DialogTitle>
+        <DialogTitle sx={{ 
+          color: '#fff', 
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          py: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          mb: 1
+        }}>
+          <BusinessIcon sx={{ mr: 1 }} /> Adaugă furnizor
+        </DialogTitle>
 
-        <DialogContent sx={{ display:'flex', flexDirection:'column', gap:2, mt:1 }}>
-        {/* --- date generale furnizor --- */}
-        <TextField label="Nume furnizor *" value={supName}
-                  onChange={e=>setSupName(e.target.value)}
-                  placeholder="Nume furnizor *" sx={textInputSX} />
-        <TextField label="Email" value={supEmail}
-                  onChange={e=>setSupEmail(e.target.value)}
-                  placeholder="Email" sx={textInputSX} />
-        <TextField label="Telefon" value={supPhone}
-                  onChange={e=>setSupPhone(e.target.value)}
-                  placeholder="Telefon" sx={textInputSX} />
+        <StyledDialogContent sx={{ display:'flex', flexDirection:'column', gap:2, px: 3 }}>
+          <SupplierForm
+            supplierForm={supplierForm}
+            updateSupplierField={updateSupplierField}
+            updateSupplierContact={updateSupplierContact}
+            addSupplierContactRow={addSupplierContactRow}
+            removeSupplierContactRow={removeSupplierContactRow}
+            cats={cats}
+            textInputSX={textInputSX}
+            type={type}
+          />
+        </StyledDialogContent>
 
-        <Autocomplete  /* categorii */
-          multiple options={cats} value={supCats}
-          getOptionLabel={o=>o.name} filterSelectedOptions
-          onChange={(_,v)=>setSupCats(v)}
-          renderInput={params=>(
-            <TextField {...params} label="Categorii *" placeholder="Categorii *" sx={textInputSX}/>
-          )}
-          sx={{ '.MuiChip-root':{ backgroundColor:'rgba(255,255,255,0.25)', color:'#fff' }}} />
-
-        {/* ---------- Contacte ---------- */}
-        <Typography sx={{mt:1,fontWeight:600}}>Contacte</Typography>
-        {supContacts.map((c,idx)=>(
-          <Box key={idx} sx={{display:'flex',gap:1}}>
-            <TextField fullWidth label="Nume *"
-                      value={c.full_name}
-                      onChange={e=>updateContact(idx,'full_name',e.target.value)}
-                      sx={{...textInputSX, flex:1}} />
-            <TextField label="Email"
-                      value={c.email}
-                      onChange={e=>updateContact(idx,'email',e.target.value)}
-                      sx={{...textInputSX, width:170}} />
-            <TextField label="Telefon"
-                      value={c.phone}
-                      onChange={e=>updateContact(idx,'phone',e.target.value)}
-                      sx={{...textInputSX, width:120}} />
-            <IconButton size="small" onClick={()=>removeContactRow(idx)}
-                        sx={{color:'#fff',alignSelf:'center'}}>
-              <RemoveIcon fontSize="inherit" />
-            </IconButton>
-          </Box>
-        ))}
-        <Button onClick={addContactRow} startIcon={<AddIcon/>}
-                sx={{alignSelf:'flex-start', color:'#fff', textTransform:'none'}}>
-          Adaugă contact
-        </Button>
-
-        {/* ---------- Offerings ---------- */}
-        <Typography sx={{mt:1,fontWeight:600}}>Offerings ({type})</Typography>
-        <Autocomplete
-          multiple freeSolo
-          options={[]} value={supOfferings}
-          onChange={(_,v)=>setSupOfferings(v)}
-          renderInput={params=>(
-            <TextField {...params} label="Materiale / Servicii"
-                      placeholder="Tastează şi Enter"
-                      sx={textInputSX}/>
-          )}
-          sx={{ '.MuiChip-root':{ backgroundColor:'rgba(255,255,255,0.25)', color:'#fff' }}} />
-      </DialogContent>
-
-
-        <DialogActions sx={{ pr: 2, pt: 1 }}>
-          <Button onClick={() => setOpenAddSupp(false)} disabled={addSupplier.isLoading}>
+        <DialogActions sx={{ 
+          p: 2, 
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          justifyContent: 'space-between'
+        }}>
+          <Button 
+            onClick={() => setOpenAddSupp(false)} 
+            disabled={addSupplier.isLoading}
+            startIcon={<CancelIcon />}
+            variant="outlined"
+            sx={{
+              color: 'rgba(255,100,100,0.9)',
+              borderColor: 'rgba(255,100,100,0.5)',
+              '&:hover': {
+                borderColor: 'rgba(255,100,100,0.9)',
+                backgroundColor: 'rgba(255,100,100,0.1)'
+              }
+            }}
+          >
             Anulează
           </Button>
           <Button
@@ -575,14 +1007,20 @@ export default function Agency() {
             onClick={() => addSupplier.mutate()}
             disabled={
               addSupplier.isLoading ||
-              !supName.trim() ||
-              supCats.length === 0
+              !supplierForm.name.trim() ||
+              supplierForm.categories.length === 0
             }
             startIcon={
               addSupplier.isLoading
                 ? <CircularProgress size={16} color="inherit" />
-                : <AddIcon />
+                : <SaveIcon />
             }
+            sx={{
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              '&:hover': {
+                boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
+              }
+            }}
           >
             Salvează
           </Button>
