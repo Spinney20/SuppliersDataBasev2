@@ -132,22 +132,24 @@ export default function Agency() {
         return emailRegex.test(email);
       };
       
-      // Validate email format for contacts
-      const validContacts = supplierForm.contacts.filter(c => c.full_name.trim()).map(c => {
-        console.log('Validating contact:', c);
-        
-        // Check for incomplete email formats like "sebienachescu@gn" without proper domain
-        if (c.email && c.email.includes('@') && !c.email.includes('.')) {
-          console.error('Email missing domain part:', c.email);
-          throw new Error(`Email-ul "${c.email}" nu are un format valid (lipsește domeniul)`);
-        }
-        
-        // Email validation
-        if (c.email && !isValidEmail(c.email)) {
-          throw new Error(`Email invalid pentru contactul "${c.full_name}"`);
-        }
-        return c;
-      });
+      // Filter out completely empty contacts (where all fields are empty)
+      const validContacts = supplierForm.contacts
+        .filter(c => c.full_name.trim() || c.email?.trim() || c.phone?.trim())
+        .map(c => {
+          console.log('Validating contact:', c);
+          
+          // Check for incomplete email formats like "sebienachescu@gn" without proper domain
+          if (c.email && c.email.includes('@') && !c.email.includes('.')) {
+            console.error('Email missing domain part:', c.email);
+            throw new Error(`Email-ul "${c.email}" nu are un format valid (lipsește domeniul)`);
+          }
+          
+          // Email validation
+          if (c.email && !isValidEmail(c.email)) {
+            throw new Error(`Email invalid pentru contactul "${c.full_name}"`);
+          }
+          return c;
+        });
       
       console.log('Valid contacts:', validContacts);
       
@@ -258,11 +260,13 @@ export default function Agency() {
         office_email: updatedSupplier.email ? updatedSupplier.email : null,
         office_phone: updatedSupplier.phone ? updatedSupplier.phone : null,
         category_ids: updatedSupplier.categories.map(c => c.id),
-        contacts: updatedSupplier.contacts.filter(c => c.full_name.trim()).map(contact => ({
-          full_name: contact.full_name,
-          email: contact.email || null,
-          phone: contact.phone || null
-        })),
+        contacts: updatedSupplier.contacts
+          .filter(c => c.full_name.trim() || c.email?.trim() || c.phone?.trim())
+          .map(contact => ({
+            full_name: contact.full_name,
+            email: contact.email || null,
+            phone: contact.phone || null
+          })),
         offerings: updatedSupplier.offerings.map(offering => ({ name: offering }))
       };
       const res = await api.put(`/suppliers/${selectedSupplier.id}`, data);

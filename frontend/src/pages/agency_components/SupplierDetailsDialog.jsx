@@ -54,7 +54,7 @@ const SupplierDetailsDialog = memo(({
     email: supplier?.office_email || '',
     phone: supplier?.office_phone || '',
     categories: supplier?.categories || [],
-    contacts: supplier?.contacts?.length ? [...supplier.contacts] : [{ full_name: '', email: '', phone: '' }],
+    contacts: supplier?.contacts?.length ? [...supplier.contacts] : [],
     offerings: supplier?.offerings?.map(o => o.name) || []
   });
   
@@ -81,7 +81,7 @@ const SupplierDetailsDialog = memo(({
         email: supplier.office_email || '',
         phone: supplier.office_phone || '',
         categories: supplierCategories,
-        contacts: supplier.contacts?.length ? [...supplier.contacts] : [{ full_name: '', email: '', phone: '' }],
+        contacts: supplier.contacts?.length ? [...supplier.contacts] : [],
         offerings: supplier.offerings?.map(o => o.name) || []
       });
     }
@@ -98,15 +98,18 @@ const SupplierDetailsDialog = memo(({
   const handleSave = () => {
     if (onSave) {
       // Prepare data for saving - convert empty strings to null for email fields
+      // and filter out contacts with empty names
       const preparedData = {
         ...supplierData,
         email: supplierData.email || null,
         phone: supplierData.phone || null,
-        contacts: supplierData.contacts.map(contact => ({
-          ...contact,
-          email: contact.email || null,
-          phone: contact.phone || null
-        }))
+        contacts: supplierData.contacts
+          .filter(contact => contact.full_name.trim() || contact.email?.trim() || contact.phone?.trim()) // Filter out completely empty contacts
+          .map(contact => ({
+            ...contact,
+            email: contact.email || null,
+            phone: contact.phone || null
+          }))
       };
       onSave(preparedData);
     }
