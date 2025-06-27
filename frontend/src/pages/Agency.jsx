@@ -20,7 +20,7 @@ import { api } from '../api/axios';
 import { useCategories } from '../api/queries';
 
 // Componente personalizate
-import { ButtonContainer, ActionButton } from './agency_components/styles';
+import { ButtonContainer, ActionButton, scrollbarStyles } from './agency_components/styles';
 import CategoryBlock from './agency_components/CategoryBlock';
 import AddSupplierDialog from './agency_components/AddSupplierDialog';
 import AddCategoryDialog from './agency_components/AddCategoryDialog';
@@ -35,7 +35,6 @@ export default function Agency() {
   const [type, setType]         = useState('material');
   const [search, setSearch]     = useState('');
   const [expanded, setExpanded] = useState([]);
-  const [showBack, setShowBack] = useState(false);
 
   /* dialogs */
   const [openAddCat,  setOpenAddCat]  = useState(false);
@@ -283,15 +282,8 @@ export default function Agency() {
     return () => document.body.classList.remove('agency-bg');
   }, []);
 
-  /* ---------- efect scroll ↑ ---------- */
+  /* ---------- referință pentru lista cu scroll ---------- */
   const listRef = useRef(null);
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const onScroll = () => setShowBack(el.scrollTop > 80);
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
 
   /* ---------- helpers ---------- */
   const isCatExpanded = id => expanded.includes(id);
@@ -526,7 +518,13 @@ export default function Agency() {
         {/*  LISTA cu scroll  */}
         <Box
           ref={listRef}
-          sx={{ flex: 1, overflowY: 'auto', pr: 1, backgroundColor: 'transparent' }}
+          sx={{ 
+            flex: 1, 
+            overflowY: 'auto', 
+            pr: 1, 
+            backgroundColor: 'transparent',
+            ...scrollbarStyles
+          }}
         >
           {cats
             .filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
@@ -542,24 +540,6 @@ export default function Agency() {
               />
             ))}
         </Box>
-
-        {/*  ÎNAPOI SUS  */}
-        {showBack && (
-          <Tooltip title="Înapoi sus" arrow>
-            <IconButton
-              size="small"
-              onClick={() => listRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-              sx={{
-                alignSelf: 'flex-end',
-                color: '#fff',
-                backgroundColor: 'rgba(255,255,255,0.15)',
-                '&:hover': { backgroundColor: 'rgba(255,255,255,0.25)' },
-              }}
-            >
-              <ArrowBackIosNewIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-        )}
       </Stack>
 
       {/* ───────────────── ADD CATEGORY DIALOG ───────────────── */}

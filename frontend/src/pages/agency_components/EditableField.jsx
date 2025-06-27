@@ -119,7 +119,7 @@ const EditableField = ({
                 wordBreak: 'break-word'
               }}
             >
-              {value || <em style={{ opacity: 0.5 }}>Nespecificat</em>}
+              {value || <em style={{ opacity: 0.5 }}>Nespecificat (vezi contacte)</em>}
             </Typography>
           </Box>
           <IconButton 
