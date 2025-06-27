@@ -4,7 +4,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useSuppliersByCat } from '../../api/queries';
 
-const CategoryBlock = memo(({ cat, expanded, toggle, agencyId, search }) => {
+const CategoryBlock = memo(({ cat, expanded, toggle, agencyId, search, onSupplierClick }) => {
   const { data: supp = [] } = useSuppliersByCat(agencyId, cat.id);
   const filteredSup = supp.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase())
@@ -39,13 +39,27 @@ const CategoryBlock = memo(({ cat, expanded, toggle, agencyId, search }) => {
           {filteredSup.map(s => (
             <Box
               key={s.id}
+              onClick={() => onSupplierClick && onSupplierClick(s)}
               sx={{
                 mt: 0.5, p: 0.5,
                 cursor: 'pointer', borderRadius: 1,
                 '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                transition: 'all 0.2s ease'
               }}
             >
-              {s.name}
+              <Typography sx={{ 
+                flex: 1,
+                fontWeight: 400,
+                fontSize: '0.95rem',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
+                {s.name}
+              </Typography>
             </Box>
           ))}
         </Box>

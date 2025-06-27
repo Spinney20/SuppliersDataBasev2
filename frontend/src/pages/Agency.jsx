@@ -24,6 +24,7 @@ import { ButtonContainer, ActionButton } from './agency_components/styles';
 import CategoryBlock from './agency_components/CategoryBlock';
 import AddSupplierDialog from './agency_components/AddSupplierDialog';
 import AddCategoryDialog from './agency_components/AddCategoryDialog';
+import SupplierDetailsDialog from './agency_components/SupplierDetailsDialog';
 
 /* ────────────────────────────────────────────────────────── */
 export default function Agency() {
@@ -39,6 +40,8 @@ export default function Agency() {
   /* dialogs */
   const [openAddCat,  setOpenAddCat]  = useState(false);
   const [openAddSupp, setOpenAddSupp] = useState(false);
+  const [openSupplierDetails, setOpenSupplierDetails] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState(null);
 
   /* form Add Category */
   const [catName, setCatName] = useState('');
@@ -147,6 +150,27 @@ export default function Agency() {
     },
   });
 
+  const updateSupplier = useMutation({
+    mutationFn: async (updatedSupplier) => {
+      const data = {
+        name: updatedSupplier.name,
+        office_email: updatedSupplier.email,
+        office_phone: updatedSupplier.phone,
+        category_ids: updatedSupplier.categories.map(c => c.id),
+        contacts: updatedSupplier.contacts.filter(c => c.full_name.trim()),
+        offerings: updatedSupplier.offerings.map(offering => ({ name: offering }))
+      };
+      const res = await api.put(`/suppliers/${selectedSupplier.id}`, data);
+      return res.data;
+    },
+    onSuccess: data => {
+      // Invalidează query-urile pentru a actualiza datele
+      qc.invalidateQueries(['categories', agencyId, type]);
+      cats.forEach(c => qc.invalidateQueries(['suppliers', agencyId, c.id]));
+      setOpenSupplierDetails(false);
+    },
+  });
+
   /* ---------- efect background ---------- */
   useEffect(() => {
     document.body.classList.add('agency-bg');
@@ -176,6 +200,16 @@ export default function Agency() {
 
   const handleSaveSupplier = () => {
     addSupplier.mutate();
+  };
+
+  const handleSupplierClick = (supplier) => {
+    console.log('Supplier selected:', supplier);
+    setSelectedSupplier(supplier);
+    setOpenSupplierDetails(true);
+  };
+
+  const handleUpdateSupplier = (updatedSupplier) => {
+    updateSupplier.mutate(updatedSupplier);
   };
 
   /* ───────────────────────── render ───────────────────────── */
@@ -398,6 +432,7 @@ export default function Agency() {
                 toggle={() => toggleExpand(c.id)}
                 agencyId={agencyId}
                 search={search}
+                onSupplierClick={handleSupplierClick}
               />
             ))}
         </Box>
@@ -446,6 +481,19 @@ export default function Agency() {
         isLoading={addSupplier.isLoading}
         onSave={handleSaveSupplier}
       />
+
+      {/* ───────────────── SUPPLIER DETAILS DIALOG ───────────────── */}
+      {selectedSupplier && (
+        <SupplierDetailsDialog
+          open={openSupplierDetails}
+          onClose={() => setOpenSupplierDetails(false)}
+          supplier={selectedSupplier}
+          cats={cats}
+          type={type}
+          isLoading={updateSupplier.isLoading}
+          onSave={handleUpdateSupplier}
+        />
+      )}
     </div>
   );
 }
