@@ -125,13 +125,13 @@ export default function Agency() {
     mutationFn: async () => {
       const data = {
         name: supplierForm.name,
-        email: supplierForm.email,
-        phone: supplierForm.phone,
-        categories: supplierForm.categories.map(c => c.id),
+        office_email: supplierForm.email,
+        office_phone: supplierForm.phone,
+        category_ids: supplierForm.categories.map(c => c.id),
         contacts: supplierForm.contacts.filter(c => c.full_name.trim()),
-        offerings: supplierForm.offerings
+        offerings: supplierForm.offerings.map(offering => ({ name: offering }))
       };
-      const res = await api.post('/suppliers', data);
+      const res = await api.post(`/agencies/${agencyId}/suppliers`, data);
       return res.data;
     },
     onSuccess: data => {
