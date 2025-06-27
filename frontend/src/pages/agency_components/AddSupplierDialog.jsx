@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { Dialog, DialogTitle, DialogActions, Button, CircularProgress } from '@mui/material';
 import { motion } from 'framer-motion';
 import { StyledDialogContent } from './styles';
@@ -20,6 +20,46 @@ const AddSupplierDialog = memo(({
   isLoading,
   onSave
 }) => {
+  const [validationErrors, setValidationErrors] = useState([]);
+
+  // Check for validation errors
+  const checkValidation = () => {
+    const errors = [];
+    
+    // Validate email format
+    const isValidEmail = (email) => {
+      if (!email) return true; // Empty emails are allowed
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(email);
+    };
+    
+    // Check main email
+    if (supplierForm.email && !isValidEmail(supplierForm.email)) {
+      errors.push('Email-ul de birou este invalid');
+    }
+    
+    // Check contact emails
+    supplierForm.contacts.forEach((contact, idx) => {
+      if (contact.email && !isValidEmail(contact.email)) {
+        errors.push(`Email invalid pentru contactul "${contact.full_name || idx + 1}"`);
+      }
+    });
+    
+    setValidationErrors(errors);
+    return errors.length === 0;
+  };
+
+  // Update validation when form changes
+  useEffect(() => {
+    checkValidation();
+  }, [supplierForm]);
+
+  const handleSave = () => {
+    if (checkValidation()) {
+      onSave();
+    }
+  };
+
   return (
     <Dialog
       open={open}
@@ -89,11 +129,12 @@ const AddSupplierDialog = memo(({
         </Button>
         <Button
           variant="contained"
-          onClick={onSave}
+          onClick={handleSave}
           disabled={
             isLoading ||
             !supplierForm.name.trim() ||
-            supplierForm.categories.length === 0
+            supplierForm.categories.length === 0 ||
+            validationErrors.length > 0
           }
           startIcon={
             isLoading

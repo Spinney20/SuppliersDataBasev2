@@ -290,9 +290,15 @@ def add_supplier_for_agency(
     db.add(sp); db.commit(); db.refresh(sp)
 
     for c in s.contacts:
-        db.add(Contact(**c.dict(), supplier_id=sp.id))
+        # Use model_dump() for Pydantic v2 compatibility
+        contact_data = c.dict() if hasattr(c, 'dict') else c.__dict__
+        db.add(Contact(**contact_data, supplier_id=sp.id))
+    
     for off in s.offerings:
-        db.add(Offering(**off.dict(), supplier=sp))
+        # Use model_dump() for Pydantic v2 compatibility
+        offering_data = off.dict() if hasattr(off, 'dict') else off.__dict__
+        db.add(Offering(**offering_data, supplier=sp))
+    
     db.commit()
     db.refresh(sp)
     return sp
@@ -320,10 +326,15 @@ def update_supplier(
     # rescriem contactele
     db.query(Contact).filter_by(supplier_id=sp.id).delete()
     for c in s.contacts:
-        db.add(Contact(**c.dict(), supplier_id=sp.id))
+        contact_data = c.dict() if hasattr(c, 'dict') else c.__dict__
+        db.add(Contact(**contact_data, supplier_id=sp.id))
+    
+    # rescriem offerings
     db.query(Offering).filter_by(supplier_id=sp.id).delete()
     for off in s.offerings:
-        db.add(Offering(**off.dict(), supplier=sp))
+        offering_data = off.dict() if hasattr(off, 'dict') else off.__dict__
+        db.add(Offering(**offering_data, supplier=sp))
+    
     db.commit()
     db.refresh(sp)
     return sp

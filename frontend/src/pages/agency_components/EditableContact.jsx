@@ -38,8 +38,21 @@ const EditableContact = ({
   };
 
   const handleSave = () => {
+    // Basic email validation
+    if (editValues.email && !isValidEmail(editValues.email)) {
+      alert('Adresa de email nu este validă');
+      return;
+    }
+    
     onSave(index, editValues);
     setIsEditing(false);
+  };
+
+  // Simple email validation function
+  const isValidEmail = (email) => {
+    if (!email) return true; // Empty emails are allowed
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
   const handleCancel = () => {

@@ -126,16 +126,114 @@ export default function Agency() {
 
   const addSupplier = useMutation({
     mutationFn: async () => {
+      // Validate email format function
+      const isValidEmail = (email) => {
+        if (!email) return true; // Empty emails are allowed
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+      };
+      
+      // Validate email format for contacts
+      const validContacts = supplierForm.contacts.filter(c => c.full_name.trim()).map(c => {
+        console.log('Validating contact:', c);
+        
+        // Check for incomplete email formats like "sebienachescu@gn" without proper domain
+        if (c.email && c.email.includes('@') && !c.email.includes('.')) {
+          console.error('Email missing domain part:', c.email);
+          throw new Error(`Email-ul "${c.email}" nu are un format valid (lipsește domeniul)`);
+        }
+        
+        // Email validation
+        if (c.email && !isValidEmail(c.email)) {
+          throw new Error(`Email invalid pentru contactul "${c.full_name}"`);
+        }
+        return c;
+      });
+      
+      console.log('Valid contacts:', validContacts);
+      
+      // Validate office email
+      if (supplierForm.email && !isValidEmail(supplierForm.email)) {
+        throw new Error('Email-ul de birou este invalid');
+      }
+
       const data = {
         name: supplierForm.name,
-        office_email: supplierForm.email,
-        office_phone: supplierForm.phone,
+        office_email: supplierForm.email ? supplierForm.email : null,
+        office_phone: supplierForm.phone ? supplierForm.phone : null,
         category_ids: supplierForm.categories.map(c => c.id),
-        contacts: supplierForm.contacts.filter(c => c.full_name.trim()),
+        contacts: validContacts.map(contact => ({
+          full_name: contact.full_name,
+          email: contact.email || null,
+          phone: contact.phone || null
+        })),
         offerings: supplierForm.offerings.map(offering => ({ name: offering }))
       };
-      const res = await api.post(`/agencies/${agencyId}/suppliers`, data);
-      return res.data;
+      
+      console.log('Offerings before mapping:', supplierForm.offerings);
+      console.log('Offerings after mapping:', data.offerings);
+      console.log('Sending supplier data:', JSON.stringify(data, null, 2));
+      try {
+        const res = await api.post(`/agencies/${agencyId}/suppliers`, data);
+        return res.data;
+      } catch (error) {
+        console.error('Error response:', error.response);
+        
+        if (error.response) {
+          console.error('Error data:', error.response.data);
+          console.error('Error status:', error.response.status);
+          
+          // Log detailed error information
+          if (error.response.data && error.response.data.detail && Array.isArray(error.response.data.detail)) {
+            console.error('Validation errors:', JSON.stringify(error.response.data.detail, null, 2));
+            error.response.data.detail.forEach((err, index) => {
+              console.error(`Error ${index + 1}:`, err);
+              if (err.loc) console.error(`- Location: ${err.loc.join('.')}`);
+              if (err.msg) console.error(`- Message: ${err.msg}`);
+              if (err.type) console.error(`- Type: ${err.type}`);
+            });
+          }
+          
+          // Try to extract a meaningful error message
+          let errorMessage = 'Eroare la adăugarea furnizorului';
+          
+          if (error.response.data && typeof error.response.data === 'object') {
+            if (error.response.data.detail) {
+              errorMessage = error.response.data.detail;
+            } else if (error.response.data.message) {
+              errorMessage = error.response.data.message;
+            } else {
+              // Try to stringify the error object
+              try {
+                errorMessage = JSON.stringify(error.response.data);
+              } catch (e) {
+                errorMessage = `Eroare ${error.response.status}: Verificați consola pentru detalii`;
+              }
+            }
+          }
+          
+          // Add a special handler for 422 errors
+          if (error.response.status === 422) {
+            console.error('Validation error details:', error.response.data);
+            
+            // Try to extract validation error details
+            if (error.response.data && error.response.data.detail) {
+              if (Array.isArray(error.response.data.detail)) {
+                const details = error.response.data.detail.map(err => 
+                  `${err.loc.join('.')} - ${err.msg}`
+                ).join('\n');
+                errorMessage = `Erori de validare:\n${details}`;
+              } else {
+                errorMessage = `Eroare de validare: ${error.response.data.detail}`;
+              }
+            }
+          }
+          
+          throw new Error(errorMessage);
+        } else {
+          throw new Error(`Eroare de rețea: ${error.message}`);
+        }
+      }
     },
     onSuccess: data => {
       // 1) dacă am adăugat categorie nouă, lista de categorii e deja invalidată
@@ -148,16 +246,24 @@ export default function Agency() {
       resetSupplierForm();
       setOpenAddSupp(false);
     },
+    onError: (error) => {
+      console.error('Mutation error:', error);
+      alert(`Eroare: ${error.message}`);
+    }
   });
 
   const updateSupplier = useMutation({
     mutationFn: async (updatedSupplier) => {
       const data = {
         name: updatedSupplier.name,
-        office_email: updatedSupplier.email,
-        office_phone: updatedSupplier.phone,
+        office_email: updatedSupplier.email ? updatedSupplier.email : null,
+        office_phone: updatedSupplier.phone ? updatedSupplier.phone : null,
         category_ids: updatedSupplier.categories.map(c => c.id),
-        contacts: updatedSupplier.contacts.filter(c => c.full_name.trim()),
+        contacts: updatedSupplier.contacts.filter(c => c.full_name.trim()).map(contact => ({
+          full_name: contact.full_name,
+          email: contact.email || null,
+          phone: contact.phone || null
+        })),
         offerings: updatedSupplier.offerings.map(offering => ({ name: offering }))
       };
       const res = await api.put(`/suppliers/${selectedSupplier.id}`, data);

@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Box, Typography, Button, Autocomplete, TextField } from '@mui/material';
 import { scrollbarStyles, textInputSX } from './styles';
 import IconTextField from './IconTextField';
@@ -13,6 +13,13 @@ import InventoryIcon from '@mui/icons-material/Inventory';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 
+// Simple email validation function
+const isValidEmail = (email) => {
+  if (!email) return true; // Empty emails are allowed
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
 // Componentă pentru formularul de furnizor
 const SupplierForm = memo(({ 
   supplierForm, 
@@ -23,6 +30,40 @@ const SupplierForm = memo(({
   cats,
   type
 }) => {
+  // State for validation errors
+  const [emailError, setEmailError] = useState('');
+  const [contactErrors, setContactErrors] = useState({});
+  
+  // Handle email field change with validation
+  const handleEmailChange = (e) => {
+    const value = e.target.value;
+    updateSupplierField('email', value);
+    
+    if (value && !isValidEmail(value)) {
+      setEmailError('Email invalid');
+    } else {
+      setEmailError('');
+    }
+  };
+  
+  // Handle contact email field change with validation
+  const handleContactEmailChange = (idx, value) => {
+    updateSupplierContact(idx, 'email', value);
+    
+    if (value && !isValidEmail(value)) {
+      setContactErrors(prev => ({
+        ...prev,
+        [idx]: 'Email invalid'
+      }));
+    } else {
+      setContactErrors(prev => {
+        const newErrors = {...prev};
+        delete newErrors[idx];
+        return newErrors;
+      });
+    }
+  };
+
   return (
     <>
       {/* --- date generale furnizor --- */}
@@ -62,9 +103,11 @@ const SupplierForm = memo(({
             icon={<EmailIcon />}
             label="Email" 
             value={supplierForm.email}
-            onChange={e => updateSupplierField('email', e.target.value)}
+            onChange={handleEmailChange}
             fullWidth
             placeholder=""
+            error={!!emailError}
+            helperText={emailError}
           />
           
           <IconTextField 
@@ -185,9 +228,11 @@ const SupplierForm = memo(({
               icon={<EmailIcon />}
               label="Email"
               value={c.email}
-              onChange={e=>updateSupplierContact(idx,'email',e.target.value)}
+              onChange={e=>handleContactEmailChange(idx, e.target.value)}
               sx={{width:200}}
               placeholder=""
+              error={!!contactErrors[idx]}
+              helperText={contactErrors[idx]}
             />
             <IconTextField 
               icon={<PhoneIcon />}

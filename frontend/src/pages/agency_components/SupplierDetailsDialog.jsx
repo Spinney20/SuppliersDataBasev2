@@ -97,7 +97,18 @@ const SupplierDetailsDialog = memo(({
 
   const handleSave = () => {
     if (onSave) {
-      onSave(supplierData);
+      // Prepare data for saving - convert empty strings to null for email fields
+      const preparedData = {
+        ...supplierData,
+        email: supplierData.email || null,
+        phone: supplierData.phone || null,
+        contacts: supplierData.contacts.map(contact => ({
+          ...contact,
+          email: contact.email || null,
+          phone: contact.phone || null
+        }))
+      };
+      onSave(preparedData);
     }
   };
 
