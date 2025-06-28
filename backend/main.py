@@ -16,7 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # 1) Config
 # --------------------------------------------------------------------
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://user:pass@localhost:5432/furnizori_dev"
+    DATABASE_URL: str
+    vite_api_url: Optional[str] = None  # Adăugat pentru a rezolva eroarea
 
     class Config:
         env_file = ".env"
@@ -356,13 +357,3 @@ def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
 @app.get("/suppliers/{supplier_id}/offerings", response_model=list[OfferingOut])
 def list_offerings(supplier_id: int, db: Session = Depends(get_db)):
     return db.query(Offering).filter_by(supplier_id=supplier_id).all()
-
-@app.get("/agencies/{agency_id}/{sup_type}/categories", response_model=list[CategoryOut])
-def cats_by_type(agency_id: int, sup_type: SupplierType, db: Session = Depends(get_db)):
-    return (db.query(Category)
-             .join(Category.suppliers)
-             .filter(Supplier.agency_id == agency_id,
-                     Category.type == sup_type)
-             .distinct()
-             .order_by(Category.name)
-             .all())

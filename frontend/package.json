@@ -3,11 +3,15 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"npm.cmd run dev\" \"npm.cmd run electron:start\"",
+    "electron:start": "wait-on http://localhost:5173 && electron .",
+    "electron:build": "npm.cmd run build && electron-builder"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -27,10 +31,38 @@
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.6.0",
+    "concurrently": "^8.2.2",
+    "electron": "^29.4.6",
+    "electron-builder": "^24.13.3",
+    "electron-is-dev": "^3.0.1",
+    "electron-store": "^10.1.0",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
-    "vite": "^6.3.5"
+    "python-shell": "^5.0.0",
+    "vite": "^6.3.5",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.suppliersdb.app",
+    "productName": "Suppliers Database",
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "buildResources": "public",
+      "output": "dist_electron"
+    },
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    }
   }
 }
