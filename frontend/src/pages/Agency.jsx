@@ -27,6 +27,7 @@ import CategoryBlock from './agency_components/CategoryBlock';
 import AddSupplierDialog from './agency_components/AddSupplierDialog';
 import AddCategoryDialog from './agency_components/AddCategoryDialog';
 import SupplierDetailsDialog from './agency_components/SupplierDetailsDialog';
+import SearchIcon from '@mui/icons-material/Search';
 
 /* ────────────────────────────────────────────────────────── */
 export default function Agency() {
@@ -466,46 +467,44 @@ export default function Agency() {
             </Button>
           </ButtonGroup>
 
-          <TextField
-            fullWidth
-            size="small"
-            variant="outlined"              // folosește variant‑ul outlined cu floating label
-            label="Caută..."               // mutăm textul în label
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            InputLabelProps={{
-              shrink: !!search,            // dacă există text, forțează label sus
-              sx: {
-                color: '#fff',
-                '&.Mui-focused': {
-                  color: '#fff',   // culoarea label‑ului la focus
-                },
-              },
-            }}
-            sx={{
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              borderRadius: 1,
-              mt: 1,
+          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+    {/* Câmpul de căutare existent */}
+    <TextField
+      size="small"
+      variant="outlined"
+      label="Caută..."
+      value={search}
+      onChange={e => setSearch(e.target.value)}
+      InputLabelProps={{
+        shrink: !!search,
+        sx: { color: '#fff', '&.Mui‑focused': { color: '#fff' } },
+      }}
+      sx={{
+        flex: 1.2,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 1,
+        '& .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
+        '&:hover .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
+        '& .MuiOutlinedInput-root.Mui‑focused fieldset': { borderColor: 'primary.main' },
+        '& .MuiInputBase-input': { color: '#fff' },
+      }}
+    />
 
-              // contur outline
-              '& .MuiOutlinedInput-root': {
-                '& fieldset': {
-                  borderColor: '#fff',
-                },
-                '&:hover fieldset': {
-                  borderColor: '#fff',
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: 'primary.main',
-                },
-              },
-
-              // textul din interior
-              '& .MuiInputBase-input': {
-                color: '#fff',
-              },
-            }}
-          />
+    {/* Buton “Caută după material” */}
+    <ActionButton
+    variant="contained"
+    color="primary"
+    startIcon={<SearchIcon />}
+    onClick={() => {/* aici deschizi popup‐ul */}}
+    sx={{
+      // elimină orice modificare de flex: folosește la fel ca butoanele de jos
+      width: '80%',
+      textTransform: 'none'
+    }}
+  >
+    Caută după material
+  </ActionButton>
+  </Box>
 
           {/* ── LINIE cu cele două BUTOANE PROFESIONISTE ── */}
         <ButtonContainer>

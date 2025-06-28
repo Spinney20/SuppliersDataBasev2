@@ -150,6 +150,7 @@ export default function Home() {
             position: 'absolute',
             top: 16,
             right: 16,
+            zIndex: (theme) => theme.zIndex.appBar + 1,
             bgcolor: 'rgba(255,255,255,0.15)',
             '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
             backdropFilter: 'blur(6px)',
