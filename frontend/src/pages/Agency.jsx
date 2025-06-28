@@ -27,6 +27,7 @@ import CategoryBlock from './agency_components/CategoryBlock';
 import AddSupplierDialog from './agency_components/AddSupplierDialog';
 import AddCategoryDialog from './agency_components/AddCategoryDialog';
 import SupplierDetailsDialog from './agency_components/SupplierDetailsDialog';
+import SearchOfferingDialog from './agency_components/SearchOfferingDialog';
 import SearchIcon from '@mui/icons-material/Search';
 
 /* ────────────────────────────────────────────────────────── */
@@ -43,6 +44,7 @@ export default function Agency() {
   const [openAddCat,  setOpenAddCat]  = useState(false);
   const [openAddSupp, setOpenAddSupp] = useState(false);
   const [openSupplierDetails, setOpenSupplierDetails] = useState(false);
+  const [openSearchOffering, setOpenSearchOffering] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
   /* form Add Category */
@@ -490,20 +492,19 @@ export default function Agency() {
       }}
     />
 
-    {/* Buton “Caută după material” */}
+    {/* Buton "Caută după material" */}
     <ActionButton
-    variant="contained"
-    color="primary"
-    startIcon={<SearchIcon />}
-    onClick={() => {/* aici deschizi popup‐ul */}}
-    sx={{
-      // elimină orice modificare de flex: folosește la fel ca butoanele de jos
-      width: '80%',
-      textTransform: 'none'
-    }}
-  >
-    Caută după material
-  </ActionButton>
+      variant="contained"
+      color="primary"
+      startIcon={<SearchIcon />}
+      onClick={() => setOpenSearchOffering(true)}
+      sx={{
+        width: '80%',
+        textTransform: 'none'
+      }}
+    >
+      Caută după {type === 'material' ? 'material' : 'serviciu'}
+    </ActionButton>
   </Box>
 
           {/* ── LINIE cu cele două BUTOANE PROFESIONISTE ── */}
@@ -606,6 +607,15 @@ export default function Agency() {
           onSave={handleUpdateSupplier}
         />
       )}
+
+      {/* ───────────────── SEARCH OFFERING DIALOG ───────────────── */}
+      <SearchOfferingDialog
+        open={openSearchOffering}
+        onClose={() => setOpenSearchOffering(false)}
+        agencyId={agencyId}
+        type={type}
+        onSupplierClick={handleSupplierClick}
+      />
     </div>
   );
 }

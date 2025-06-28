@@ -5,7 +5,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy import or_
 from sqlalchemy import and_
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 from pydantic_settings import BaseSettings
 from sqlalchemy import Column, Integer, String, ForeignKey, create_engine, UniqueConstraint, Table
@@ -357,3 +357,40 @@ def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
 @app.get("/suppliers/{supplier_id}/offerings", response_model=list[OfferingOut])
 def list_offerings(supplier_id: int, db: Session = Depends(get_db)):
     return db.query(Offering).filter_by(supplier_id=supplier_id).all()
+
+# ----------- search suppliers by offering ----------------------------
+@app.get("/agencies/{agency_id}/search/offerings", response_model=list[SupplierOut])
+def search_suppliers_by_offering(
+    agency_id: int, 
+    q: str = Query(..., description="Search term for offering name"),
+    type: Optional[SupplierType] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Search suppliers by offering name in a specific agency.
+    Optionally filter by supplier type (material/service).
+    """
+    query = (
+        db.query(Supplier)
+        .join(Offering, Supplier.id == Offering.supplier_id)
+        .filter(
+            Supplier.agency_id == agency_id,
+            Offering.name.ilike(f"%{q}%")
+        )
+    )
+    
+    # If type is provided, filter suppliers by categories of that type
+    if type:
+        query = (
+            query.join(
+                supplier_category,
+                Supplier.id == supplier_category.c.supplier_id
+            )
+            .join(
+                Category,
+                Category.id == supplier_category.c.category_id
+            )
+            .filter(Category.type == type)
+        )
+    
+    return query.distinct().order_by(Supplier.name).all()

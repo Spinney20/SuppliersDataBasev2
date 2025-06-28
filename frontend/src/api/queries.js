@@ -27,3 +27,19 @@ export const useSuppliersByCat = (agencyId, catId) =>
         .then(r => r.data),
     enabled: !!catId,
   });
+
+// ▸ /agencies/:id/search/offerings
+export const useSearchSuppliersByOffering = (agencyId, searchTerm, type) =>
+  useQuery({
+    queryKey: ['suppliers', 'search', agencyId, searchTerm, type],
+    queryFn: () =>
+      api
+        .get(`/agencies/${agencyId}/search/offerings`, {
+          params: {
+            q: searchTerm,
+            type: type
+          }
+        })
+        .then(r => r.data),
+    enabled: !!agencyId && !!searchTerm && searchTerm.length > 0,
+  });
