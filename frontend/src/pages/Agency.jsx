@@ -11,13 +11,15 @@ import {
   ButtonGroup,
   Button,
 } from '@mui/material';
-import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
+import ReplyIcon           from '@mui/icons-material/Reply';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AddIcon from '@mui/icons-material/Add';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../api/axios';
 import { useCategories } from '../api/queries';
+import { useNavigate } from 'react-router-dom';
+import { styled } from '@mui/material/styles';
 
 // Componente personalizate
 import { ButtonContainer, ActionButton, scrollbarStyles } from './agency_components/styles';
@@ -253,6 +255,21 @@ export default function Agency() {
     }
   });
 
+  const BackButton = styled(IconButton)(({ theme }) => ({
+    position: 'absolute',
+    top: theme.spacing(2),          // 16 px
+    left: theme.spacing(2),
+    color: '#fff',                  // icon alb
+    backgroundColor: 'transparent', // fără fundal
+    transition: 'transform .25s ease-in-out',
+    '&:hover': {
+      transform: 'scale(1.15)',     // se mărește ușor
+      backgroundColor: 'transparent'
+    }
+  }));
+
+  const navigate = useNavigate();
+
   const updateSupplier = useMutation({
     mutationFn: async (updatedSupplier) => {
       const data = {
@@ -317,6 +334,12 @@ export default function Agency() {
   /* ───────────────────────── render ───────────────────────── */
   return (
     <div className="AppContainer">
+      {/* ─── BACK BUTTON ─── */}
+    <Tooltip title="Inapoi pe pagina Home" placement="right" arrow>
+      <BackButton onClick={() => navigate('/') /* sau navigate(-1) */}>
+        <ReplyIcon />
+      </BackButton>
+    </Tooltip>
       <Stack
         spacing={2}
         sx={{
