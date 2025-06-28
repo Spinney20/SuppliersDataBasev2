@@ -4,7 +4,6 @@ import { useAgencies } from '../api/queries';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Grid,
   Paper,
   Typography,
   IconButton,
@@ -140,8 +139,7 @@ export default function Home() {
         overflow: 'hidden',
         display: 'flex',
         justifyContent: 'center',
-        alignItems: 'flex-start',
-        pt: { xs: 8, md: 12 },
+        alignItems: 'center',
       }}
     >
       {/* Database config button (only in Electron) */}
@@ -162,116 +160,150 @@ export default function Home() {
       )}
 
       <AnimatePresence mode="wait">
-        <Grid
-          key="grid" // for proper exit if we ever need
-          container
-          spacing={{ xs: 3, md: 6 }}
-          justifyContent="center"
+        <Box
+          key="grid"
           component={motion.div}
           variants={gridVariants}
           initial="hidden"
           animate="visible"
+          sx={{
+            display: 'flex',
+            width: '100%',
+            height: '100%',
+            justifyContent: 'center',
+            alignItems: 'center',
+            px: 2,
+          }}
         >
-          {agencies.map((a, idx) => {
-            // direcţia de exit – jumătate stânga, jumătate dreapta
-            console.log('id:', a.id);
-            const exitVariant =
-              clickedId && a.id !== clickedId
-                ? idx % 2 === 0
-                  ? 'exitLeft'
-                  : 'exitRight'
-                : undefined;
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: '2%', // Percentage-based gap scales with container
+              width: '100%',
+              maxWidth: '1800px', // Prevent excessive stretching on ultra-wide screens
+            }}
+          >
+            {agencies.map((a, idx) => {
+              const exitVariant =
+                clickedId && a.id !== clickedId
+                  ? idx % 2 === 0
+                    ? 'exitLeft'
+                    : 'exitRight'
+                  : undefined;
 
-            return (
-              <Grid
-                item
-                key={a.id}
-                component={motion.div}
-                variants={cardVariants}
-                exit={exitVariant}
-              >
-                <MotionPaper
-                  whileHover={{
-                    scale: 1.06,
-                    rotateY: 5,
-                    boxShadow: '0 24px 48px rgba(0,0,0,0.35)',
-                  }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => handleClick(a.id)}
-                  sx={{
-                    width: { xs: '95vw', sm: 400, md: 450},
-                    height: { xs: '55vh', md: '70vh' },
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    borderRadius: 6,
-                    p: 4,
-                    bgcolor: 'rgba(255,255,255,0.12)',
-                    backdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(255,255,255,0.25)',
-                    userSelect: 'none',
-                    position: 'relative',
-                    overflow: 'hidden',
-                  }}
-                  elevation={0}
-                >
-                  {/* ACCENT DECORATIV – un gradient pe colţ */}
-                  {/* FOTO ORAȘ – blend cu gradient */}
+              return (
                 <Box
-                component="img"
-                src={cityImg[a.name.toLowerCase()]}
-                alt={a.name}
-                sx={{
-                    position: 'absolute',
-                    inset: a.id == 3 ? '23% 0 0 0' : '25% 0 0 0',
-                    objectFit: 'contain',        // 'cover' sau 'contain' depinde de poză
-                    filter: 'grayscale(1) contrast(1.25)',
-                    mixBlendMode: 'luminosity',
-                    opacity: 0.82,
-                    pointerEvents: 'none',
-                }}
-                />
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      inset: 0,
-                      background:
-                        'radial-gradient(circle at top left, rgba(255,255,255,0.4) 0%, transparent 60%)',
-                      pointerEvents: 'none',
+                  key={a.id}
+                  component={motion.div}
+                  variants={cardVariants}
+                  exit={exitVariant}
+                  sx={{
+                    width: `${30}%`, // Exact same width for all cards (30% of container)
+                    maxWidth: '450px', // Maximum width for very large screens
+                  }}
+                >
+                  <MotionPaper
+                    whileHover={{
+                      scale: 1.06,
+                      rotateY: 5,
+                      boxShadow: '0 24px 48px rgba(0,0,0,0.35)',
                     }}
-                  />
-
-                  <Stack spacing={3}>
-                    <Typography
-                      variant="h4"
-                      fontWeight={700}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => handleClick(a.id)}
+                    sx={{
+                      width: '100%',
+                      // Maintain aspect ratio close to original design
+                      paddingTop: '140%', 
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      borderRadius: 6,
+                      bgcolor: 'rgba(255,255,255,0.12)',
+                      backdropFilter: 'blur(12px)',
+                      border: '1px solid rgba(255,255,255,0.25)',
+                      userSelect: 'none',
+                      position: 'relative',
+                      overflow: 'hidden',
+                    }}
+                    elevation={0}
+                  >
+                    {/* Content wrapper to position elements inside the aspect ratio container */}
+                    <Box
                       sx={{
-                        color: '#fff',
-                        textShadow: '0 2px 6px rgba(0,0,0,.5)',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        p: '7%', // Percentage-based padding scales with container
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
                       }}
                     >
-                      Agentia {a.name}
-                    </Typography>
-                  </Stack>
+                      {/* ACCENT DECORATIV – un gradient pe colţ */}
+                      {/* FOTO ORAȘ – blend cu gradient */}
+                      <Box
+                        component="img"
+                        src={cityImg[a.name.toLowerCase()]}
+                        alt={a.name}
+                        sx={{
+                          position: 'absolute',
+                          inset: a.id == 3 ? '23% 0 0 0' : '25% 0 0 0',
+                          objectFit: 'contain',
+                          width: '100%',
+                          height: '75%',
+                          filter: 'grayscale(1) contrast(1.25)',
+                          mixBlendMode: 'luminosity',
+                          opacity: 0.82,
+                          pointerEvents: 'none',
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          inset: 0,
+                          background:
+                            'radial-gradient(circle at top left, rgba(255,255,255,0.4) 0%, transparent 60%)',
+                          pointerEvents: 'none',
+                        }}
+                      />
 
-                  {/* BUTTON STYLE ICON */}
-                  <IconButton
-                    sx={{
-                      alignSelf: 'flex-end',
-                      mt: 2,
-                      bgcolor: 'rgba(255,255,255,0.15)',
-                      '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
-                      backdropFilter: 'blur(6px)',
-                    }}
-                  >
-                    <ArrowForwardIosIcon sx={{ color: '#fff' }} />
-                  </IconButton>
-                </MotionPaper>
-              </Grid>
-            );
-          })}
-        </Grid>
+                      <Stack spacing={3}>
+                        <Typography
+                          variant="h4"
+                          fontWeight={700}
+                          sx={{
+                            color: '#fff',
+                            textShadow: '0 2px 6px rgba(0,0,0,.5)',
+                            fontSize: { xs: '1.5rem', sm: '1.8rem', md: '2.125rem' },
+                          }}
+                        >
+                          Agentia {a.name}
+                        </Typography>
+                      </Stack>
+
+                      {/* BUTTON STYLE ICON */}
+                      <IconButton
+                        sx={{
+                          alignSelf: 'flex-end',
+                          bgcolor: 'rgba(255,255,255,0.15)',
+                          '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+                          backdropFilter: 'blur(6px)',
+                        }}
+                      >
+                        <ArrowForwardIosIcon sx={{ color: '#fff' }} />
+                      </IconButton>
+                    </Box>
+                  </MotionPaper>
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
       </AnimatePresence>
 
       {/* Database Configuration Dialog */}

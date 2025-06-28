@@ -10,8 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm.cmd run dev\" \"npm.cmd run electron:start\"",
-    "electron:start": "wait-on http://localhost:5173 && electron .",
-    "electron:build": "npm.cmd run build && electron-builder"
+    "electron:start": "wait-on http://localhost:5173 -t 30000 && electron .",
+    "electron:build": "npm.cmd run build && electron-builder --config electron-builder.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

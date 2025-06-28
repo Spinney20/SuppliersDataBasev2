@@ -63,16 +63,6 @@ function startPythonBackend() {
     return;
   }
 
-  // Set up environment variables for the Python process
-  const options = {
-    mode: 'text',
-    pythonOptions: ['-u'], // unbuffered output
-    env: {
-      DATABASE_URL: dbConfig.url,
-      ELECTRON_RUN: '1'
-    }
-  };
-
   // Start the Python process using spawn from child_process
   try {
     const { spawn } = require('child_process');
@@ -83,7 +73,9 @@ function startPythonBackend() {
       pythonPath = 'python'; // on Windows, use 'python' or 'py'
     }
     
-    // Spawn the Python process with uvicorn to keep it running
+    console.log('Starting Python backend...');
+    
+    // Folosim direct uvicorn cu flag-uri pentru pornire rapidă
     pythonProcess = spawn(pythonPath, [
       '-m', 
       'uvicorn', 
@@ -91,13 +83,16 @@ function startPythonBackend() {
       '--host', 
       '127.0.0.1', 
       '--port', 
-      '8000'
+      '8000',
+      '--no-access-log', // Eliminăm logurile de acces pentru pornire mai rapidă
+      '--workers', '1'    // Un singur worker pentru aplicația Electron
     ], {
       cwd: path.join(process.cwd(), '..', 'backend'),
       env: {
         ...process.env,
         DATABASE_URL: dbConfig.url,
-        ELECTRON_RUN: '1'
+        ELECTRON_RUN: '1',
+        PYTHONUNBUFFERED: '1' // Dezactivăm bufferizarea pentru output mai rapid
       }
     });
 
@@ -198,8 +193,11 @@ ipcMain.handle('save-db-config', async (event, config) => {
 
 // App lifecycle events
 app.whenReady().then(() => {
-  createWindow();
+  // Pornim backend-ul Python mai devreme, înainte de a crea fereastra
   startPythonBackend();
+  
+  // Apoi creăm fereastra
+  createWindow();
 });
 
 app.on('window-all-closed', () => {
@@ -212,8 +210,5 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
-    if (!pythonProcess) {
-      startPythonBackend();
-    }
   }
 }); 
