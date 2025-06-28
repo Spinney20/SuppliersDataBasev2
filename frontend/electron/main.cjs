@@ -7,6 +7,7 @@ const { getDbConfig, saveDbConfig, testConnection } = require('./db-config.cjs')
 
 let mainWindow;
 let pythonProcess = null;
+let isAppQuitting = false; // Flag pentru a urmări starea de închidere a aplicației
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -36,9 +37,23 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   }
 
+  // Prevenim închiderea imediată a ferestrei pentru a opri mai întâi procesul Python
+  mainWindow.on('close', (e) => {
+    if (!isAppQuitting) {
+      e.preventDefault();
+      console.log('Window closing, stopping Python backend...');
+      
+      // Oprim procesul Python și apoi închidem fereastra
+      stopPythonBackendWithTimeout().then(() => {
+        console.log('Python backend stopped, now closing window');
+        isAppQuitting = true;
+        mainWindow.close();
+      });
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
-    stopPythonBackend();
   });
 }
 
@@ -110,27 +125,33 @@ function startPythonBackend() {
       console.error('Python stderr:', data.toString());
     });
 
+    // Flag pentru a urmări dacă procesul a fost oprit intenționat
+    pythonProcess.intentionallyKilled = false;
+
     // Handle process exit
     pythonProcess.on('close', (code) => {
       console.log(`Python backend exited with code ${code}`);
-      pythonProcess = null;
       
-      // Show error if process exited with non-zero code
-      if (code !== 0 && mainWindow) {
+      // Arătăm eroarea doar dacă procesul nu a fost oprit intenționat și codul de ieșire este diferit de 0 și null
+      if (!pythonProcess.intentionallyKilled && code !== 0 && code !== null && mainWindow) {
         dialog.showErrorBox(
           'Backend Error',
           `Python backend exited unexpectedly with code ${code}`
         );
       }
+      
+      pythonProcess = null;
     });
 
     // Handle process error
     pythonProcess.on('error', (err) => {
       console.error('Python process error:', err);
-      dialog.showErrorBox(
-        'Backend Error',
-        `Python backend error: ${err.message}`
-      );
+      if (mainWindow) {
+        dialog.showErrorBox(
+          'Backend Error',
+          `Python backend error: ${err.message}`
+        );
+      }
     });
 
     console.log('Python backend started');
@@ -145,23 +166,131 @@ function startPythonBackend() {
 
 // Stop Python backend
 function stopPythonBackend() {
-  if (pythonProcess) {
-    if (process.platform === 'win32') {
-      // On Windows, we need to kill the process tree
-      require('child_process').exec(`taskkill /pid ${pythonProcess.pid} /T /F`, (error) => {
-        if (error) {
-          console.error('Error killing Python process:', error);
+  console.log('Attempting to stop Python backend...');
+  
+  // Funcție pentru a verifica și opri orice proces care rulează pe portul 8000
+  const checkAndKillPortProcesses = () => {
+    return new Promise((resolve) => {
+      if (process.platform === 'win32') {
+        require('child_process').exec('netstat -ano | findstr :8000', (error, stdout) => {
+          if (!error && stdout) {
+            const lines = stdout.trim().split('\n');
+            const killPromises = [];
+            
+            for (const line of lines) {
+              const parts = line.trim().split(/\s+/);
+              if (parts.length > 4 && line.includes('LISTENING')) {
+                const pid = parts[parts.length - 1];
+                console.log(`Found process on port 8000 with PID ${pid}, attempting to kill`);
+                
+                killPromises.push(new Promise((killResolve) => {
+                  require('child_process').exec(`taskkill /pid ${pid} /F`, (err) => {
+                    if (err) {
+                      console.log(`Process ${pid} might have already been terminated: ${err.message}`);
+                    } else {
+                      console.log(`Successfully killed process ${pid}`);
+                    }
+                    killResolve();
+                  });
+                }));
+              }
+            }
+            
+            // Așteptăm terminarea tuturor proceselor de kill
+            Promise.all(killPromises).then(() => {
+              console.log('All port 8000 processes have been addressed');
+              resolve();
+            });
+          } else {
+            console.log('No processes found on port 8000');
+            resolve();
+          }
+        });
+      } else {
+        // Pe alte platforme
+        resolve();
+      }
+    });
+  };
+  
+  // Procesul principal de oprire
+  return new Promise((resolve) => {
+    if (pythonProcess) {
+      try {
+        console.log(`Attempting to terminate Python process with PID ${pythonProcess.pid}`);
+        
+        // Marcăm procesul ca fiind oprit intenționat pentru a evita afișarea erorii
+        pythonProcess.intentionallyKilled = true;
+        
+        if (process.platform === 'win32') {
+          // Verificăm mai întâi dacă procesul mai există
+          const { exec } = require('child_process');
+          
+          // Prima încercăm să terminăm procesul direct
+          try {
+            pythonProcess.kill('SIGTERM');
+            console.log('SIGTERM sent to Python process');
+          } catch (killError) {
+            console.log(`Error sending SIGTERM to process: ${killError.message}`);
+          }
+          
+          // Apoi folosim taskkill pentru a ne asigura că toate procesele copil sunt oprite
+          exec(`taskkill /pid ${pythonProcess.pid} /T /F`, (error) => {
+            if (error) {
+              console.log(`Process might have already been terminated: ${error.message}`);
+            } else {
+              console.log('Python backend stopped with taskkill');
+            }
+            
+            // Verificăm și alte procese pe portul 8000
+            checkAndKillPortProcesses().then(() => {
+              pythonProcess = null;
+              resolve();
+            });
+          });
         } else {
-          console.log('Python backend stopped');
+          // On Unix-like systems
+          pythonProcess.kill();
+          console.log('Python process killed on Unix-like system');
+          pythonProcess = null;
+          resolve();
         }
-      });
+      } catch (err) {
+        console.log(`Error during Python process cleanup: ${err.message}`);
+        pythonProcess = null;
+        
+        // Verificăm și alte procese pe portul 8000
+        checkAndKillPortProcesses().then(resolve);
+      }
     } else {
-      // On Unix-like systems
-      pythonProcess.kill();
+      console.log('No Python process reference found, checking for orphaned processes');
+      // Verificăm dacă există vreun proces care rulează pe portul 8000
+      checkAndKillPortProcesses().then(resolve);
     }
-    pythonProcess = null;
-    console.log('Python backend stopping...');
-  }
+  });
+}
+
+// Funcție pentru a opri procesul Python cu timeout
+function stopPythonBackendWithTimeout(timeout = 2000) {
+  return new Promise((resolve) => {
+    // Setăm un timer pentru a preveni blocarea aplicației
+    const timeoutId = setTimeout(() => {
+      console.log(`Timeout reached (${timeout}ms) while stopping Python backend, continuing anyway`);
+      resolve();
+    }, timeout);
+    
+    // Încercăm să oprim procesul Python
+    stopPythonBackend()
+      .then(() => {
+        clearTimeout(timeoutId); // Anulăm timeout-ul dacă procesul s-a oprit cu succes
+        resolve();
+      })
+      .catch((err) => {
+        console.log(`Error stopping Python backend: ${err?.message || 'Unknown error'}`);
+        clearTimeout(timeoutId);
+        resolve(); // Continuăm oricum
+      });
+  });
 }
 
 // IPC handlers for database configuration
@@ -193,18 +322,63 @@ ipcMain.handle('save-db-config', async (event, config) => {
 
 // App lifecycle events
 app.whenReady().then(() => {
-  // Pornim backend-ul Python mai devreme, înainte de a crea fereastra
-  startPythonBackend();
-  
-  // Apoi creăm fereastra
-  createWindow();
+  // Verificăm dacă există deja procese care rulează pe portul 8000 și le oprim
+  if (process.platform === 'win32') {
+    require('child_process').exec('netstat -ano | findstr :8000', (error, stdout) => {
+      if (!error && stdout) {
+        const lines = stdout.trim().split('\n');
+        let foundProcess = false;
+        
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length > 4 && line.includes('LISTENING')) {
+            foundProcess = true;
+            const pid = parts[parts.length - 1];
+            console.log(`Found existing process on port 8000 with PID ${pid}, killing it before starting`);
+            require('child_process').exec(`taskkill /pid ${pid} /F`, (err) => {
+              if (err) {
+                console.error(`Failed to kill process ${pid}:`, err);
+              } else {
+                console.log(`Successfully killed existing process ${pid}`);
+              }
+            });
+          }
+        }
+        
+        // Așteptăm puțin pentru a ne asigura că portul este eliberat
+        setTimeout(() => {
+          startPythonBackend();
+          createWindow();
+        }, foundProcess ? 1000 : 0);
+      } else {
+        // Niciun proces nu rulează pe portul 8000, pornim normal
+        startPythonBackend();
+        createWindow();
+      }
+    });
+  } else {
+    // Pe alte platforme, pornim normal
+    startPythonBackend();
+    createWindow();
+  }
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    stopPythonBackend();
-    app.quit();
+    // Marcăm aplicația ca fiind în proces de închidere
+    isAppQuitting = true;
+    
+    // Oprim procesul Python înainte de a închide aplicația
+    stopPythonBackendWithTimeout().then(() => {
+      console.log('Python backend stopped, now quitting app');
+      app.quit();
+    });
   }
+});
+
+app.on('before-quit', () => {
+  isAppQuitting = true;
+  stopPythonBackendWithTimeout(1000); // Timeout mai scurt pentru before-quit
 });
 
 app.on('activate', () => {

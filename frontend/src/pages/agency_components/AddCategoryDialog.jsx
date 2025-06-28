@@ -38,15 +38,14 @@ const AddCategoryDialog = memo(({
       }}
     >
       <DialogTitle sx={{ 
-        color: '#fff', 
+        color: 'primary.main', 
         pb: 1,
         borderBottom: '1px solid rgba(255,255,255,0.1)',
         py: 2,
         display: 'flex',
         alignItems: 'center',
         gap: 1,
-        mb: 1,
-        color: 'primary.main'
+        mb: 1
       }}>
         <CategoryIcon sx={{ mr: 1 }} color="primary" /> Adaugă categorie ({type})
       </DialogTitle>
