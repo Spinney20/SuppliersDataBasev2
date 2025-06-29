@@ -1,9 +1,9 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense, useMemo } from "react";
 import { UserProvider } from "./context/UserContext";
 import UserStatus from "./components/UserStatus";
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider, createTheme, responsiveFontSizes } from '@mui/material/styles';
 import { CssBaseline, CircularProgress, Box } from '@mui/material';
 import './App.css';
 
@@ -26,56 +26,6 @@ const LoadingFallback = () => (
   </Box>
 );
 
-// Optimizat pentru performanță - nu se va recrea la fiecare render
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-    background: {
-      default: '#f5f5f5',
-    },
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h1: {
-      fontSize: '2.5rem',
-      fontWeight: 600,
-    },
-    h2: {
-      fontSize: '2rem',
-      fontWeight: 500,
-    },
-    h3: {
-      fontSize: '1.75rem',
-      fontWeight: 500,
-    },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 8,
-          textTransform: 'none',
-          fontWeight: 500,
-        },
-      },
-    },
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          '& .MuiOutlinedInput-root': {
-            borderRadius: 8,
-          },
-        },
-      },
-    },
-  },
-});
-
 // Create a client cu optimizări pentru performanță
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -93,6 +43,91 @@ const isElectron = window.api !== undefined;
 
 export default function App() {
   const [isElectronReady, setIsElectronReady] = useState(!isElectron);
+
+  // Creăm tema o singură dată folosind useMemo pentru a evita recalculările
+  const theme = useMemo(() => {
+    // Creăm tema de bază
+    const baseTheme = createTheme({
+      palette: {
+        primary: {
+          main: '#1976d2',
+          light: '#42a5f5',
+          dark: '#1565c0',
+        },
+        secondary: {
+          main: '#dc004e',
+          light: '#ff4081',
+          dark: '#c51162',
+        },
+        background: {
+          default: '#f5f5f5',
+          paper: '#ffffff',
+        },
+        // Optimizăm pentru performanță reducând numărul de culori
+        text: {
+          primary: 'rgba(0, 0, 0, 0.87)',
+          secondary: 'rgba(0, 0, 0, 0.6)',
+        },
+      },
+      typography: {
+        fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+        // Optimizăm pentru performanță definind doar stilurile necesare
+        h1: {
+          fontSize: '2.5rem',
+          fontWeight: 600,
+        },
+        h2: {
+          fontSize: '2rem',
+          fontWeight: 500,
+        },
+        h3: {
+          fontSize: '1.75rem',
+          fontWeight: 500,
+        },
+      },
+      components: {
+        // Optimizăm pentru performanță definind doar override-urile necesare
+        MuiButton: {
+          defaultProps: {
+            disableRipple: true, // Dezactivăm ripple pentru performanță
+          },
+          styleOverrides: {
+            root: {
+              borderRadius: 8,
+              textTransform: 'none',
+              fontWeight: 500,
+            },
+          },
+        },
+        MuiTextField: {
+          styleOverrides: {
+            root: {
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 8,
+              },
+            },
+          },
+        },
+        // Optimizăm Dialog-urile
+        MuiDialog: {
+          defaultProps: {
+            transitionDuration: 150, // Reducem durata animațiilor
+          },
+        },
+        // Optimizăm tranzițiile
+        MuiCssBaseline: {
+          styleOverrides: {
+            '*, *::before, *::after': {
+              transition: 'none !important', // Dezactivăm tranzițiile implicite
+            },
+          },
+        },
+      },
+    });
+    
+    // Aplicăm responsive font sizes pentru a optimiza textul pe diferite dispozitive
+    return responsiveFontSizes(baseTheme);
+  }, []); // Dependențe goale - tema se creează o singură dată
 
   useEffect(() => {
     // If we're in Electron, check that the API is ready

@@ -1,8 +1,20 @@
+/* Optimizări pentru performanță */
 html, body, #root {
   width: 100%;
   height: 100%;
   margin: 0;
+  padding: 0;
   overflow: hidden;
+  /* Optimizare pentru text */
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Optimizare pentru scrolling */
+* {
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch; /* Scrolling mai fluid pe iOS */
 }
 
 /* Fix for Electron drag issues */
@@ -15,31 +27,37 @@ html, body, #root {
   left: 0;
   right: 0;
   z-index: 9999;
+  will-change: transform; /* Optimizare GPU */
 }
 
-/* Fix for Electron background paths */
+/* Fix for Electron background paths - optimizat pentru performanță */
 body {
   background-image: url('./assets/background1.jpg');
   background-repeat: no-repeat;
   background-position: left top;
   background-size: cover;
   background-attachment: fixed;
+  /* Optimizări pentru randare */
+  will-change: transform;
+  backface-visibility: hidden;
+  perspective: 1000px;
+  transform-style: preserve-3d;
 }
 
 body.agency-bg {
   background-image: url('./assets/background2.png') !important;
-  background-repeat: no-repeat;
   background-position: center center;
-  background-size: cover;
-  background-attachment: fixed;
 }
 
-.AppContainer{
-  display:flex;
-  width:100%;
-  height:100%;
-  align-items:center;   /* vertical centre */
-  justify-content:flex-end; /* lipit de dreapta */
+.AppContainer {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;   /* vertical centre */
+  justify-content: flex-end; /* lipit de dreapta */
+  /* Optimizări pentru randare */
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 /* Electron-specific styles */
@@ -48,4 +66,21 @@ body.agency-bg {
   top: 10px;
   right: 10px;
   z-index: 1000;
+}
+
+/* Optimizări pentru animații */
+@media (prefers-reduced-motion) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Optimizări pentru dispozitive mobile */
+@media screen and (max-width: 768px) {
+  body, body.agency-bg {
+    background-size: auto;
+  }
 }

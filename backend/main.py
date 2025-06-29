@@ -297,8 +297,8 @@ def suppliers_by_category(
 def suppliers_by_agency(agency_id: int, db: Session = Depends(get_db)):
     return (
         db.query(Supplier)
-          .filter(Supplier.agency_id == agency_id)
-          .order_by(Supplier.name)
+              .filter(Supplier.agency_id == agency_id)
+              .order_by(Supplier.name)
           .all()
     )
 
@@ -378,7 +378,7 @@ def update_supplier(
     for o in s.offerings:
         offering = Offering(**o.model_dump(), supplier_id=supplier_id)
         db.add(offering)
-
+    
     db.commit()
     db.refresh(supplier)
     return supplier

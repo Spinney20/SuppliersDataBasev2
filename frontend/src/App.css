@@ -1,3 +1,32 @@
+/* Optimizat - eliminăm stilurile neutilizate */
+/* Păstrăm doar stilurile esențiale */
+
+/* Optimizări pentru animații - folosim will-change pentru a activa accelerarea hardware */
+.animated {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+/* Optimizări pentru tranzițiile MUI */
+.MuiPaper-root {
+  will-change: transform, opacity;
+}
+
+/* Optimizări pentru scrolling */
+.scroll-container {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Optimizări pentru imagini */
+img {
+  content-visibility: auto; /* Optimizare pentru Chrome */
+}
+
+/* Optimizări pentru text */
+.text-content {
+  text-rendering: optimizeSpeed;
+}
 
 .logo {
   height: 6em;

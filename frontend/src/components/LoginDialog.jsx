@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -24,7 +24,7 @@ import LoginIcon from '@mui/icons-material/Login';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { motion } from 'framer-motion';
 
-// Import styles
+// Import styles - definite în afara componentei pentru a evita recrearea la fiecare render
 const textInputSX = {
   backgroundColor: 'rgba(255,255,255,0.05)',
   '& .MuiInputLabel-root':            { color: '#fff' },
@@ -41,7 +41,96 @@ const textInputSX = {
   }
 };
 
-export default function LoginDialog({ open, onClose }) {
+// Stiluri pentru Dialog - definite în afara componentei
+const dialogPaperProps = {
+  initial:  { opacity: 0, scale: 0.9 },
+  animate:  { opacity: 1, scale: 1 },
+  exit:     { opacity: 0, scale: 0.9 },
+  transition: { duration: 0.25 },
+  sx: { 
+    backdropFilter: 'blur(8px)', 
+    backgroundColor: 'rgba(10,10,10,0.85)',
+    px: 2, 
+    pb: 2, 
+    borderRadius: 3,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+  },
+};
+
+const dialogTitleSx = { 
+  color: 'primary.main', 
+  pb: 1,
+  borderBottom: '1px solid rgba(255,255,255,0.1)',
+  py: 2,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 1,
+  mb: 1
+};
+
+const tabsSx = { 
+  borderBottom: 1, 
+  borderColor: 'rgba(255,255,255,0.1)',
+  '& .MuiTab-root': { 
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'none',
+    fontSize: '0.9rem',
+    '&.Mui-selected': {
+      color: '#fff',
+    }
+  },
+  '& .MuiTabs-indicator': {
+    backgroundColor: 'primary.main',
+  }
+};
+
+const dialogContentSx = {
+  '&::-webkit-scrollbar': {
+    width: '8px',
+  },
+  '&::-webkit-scrollbar-track': {
+    background: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: '4px',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    background: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: '4px',
+    '&:hover': {
+      background: 'rgba(255, 255, 255, 0.3)',
+    },
+  },
+};
+
+const cancelButtonSx = {
+  color: 'rgba(255,100,100,0.9)',
+  borderColor: 'rgba(255,100,100,0.5)',
+  textTransform: 'none',
+  '&:hover': {
+    borderColor: 'rgba(255,100,100,0.9)',
+    backgroundColor: 'rgba(255, 0, 0, 0.08)',
+  },
+};
+
+const continueButtonSx = {
+  textTransform: 'none',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+  '&:hover': {
+    boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
+  }
+};
+
+const backButtonSx = {
+  color: '#fff',
+  borderColor: 'rgba(255,255,255,0.5)',
+  textTransform: 'none',
+  '&:hover': {
+    borderColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+};
+
+// Folosim memo pentru a preveni re-renderizările inutile
+const LoginDialog = memo(function LoginDialog({ open, onClose }) {
   const { login, isLoggedIn } = useUser();
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState({
@@ -83,19 +172,27 @@ export default function LoginDialog({ open, onClose }) {
     }
   }, [isLoggedIn, open, onClose]);
 
-  const handleChange = (e) => {
+  // Folosim useCallback pentru a preveni recrearea funcțiilor la fiecare render
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-  };
+  }, []);
 
-  const handleTabChange = (event, newValue) => {
+  const handleTabChange = useCallback((event, newValue) => {
     setActiveTab(newValue);
-  };
+  }, []);
 
-  const handleSubmit = async (e) => {
+  const handleTogglePasswordVisibility = useCallback(() => {
+    setShowPassword(prev => !prev);
+  }, []);
+
+  const setTabZero = useCallback(() => setActiveTab(0), []);
+  const setTabOne = useCallback(() => setActiveTab(1), []);
+
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
     
@@ -137,11 +234,7 @@ export default function LoginDialog({ open, onClose }) {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleTogglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
+  }, [formData, login, onClose]);
 
   return (
     <Dialog 
@@ -150,31 +243,13 @@ export default function LoginDialog({ open, onClose }) {
       maxWidth="sm"
       fullWidth
       PaperComponent={motion.div}
-      PaperProps={{
-        initial:  { opacity: 0, scale: 0.9 },
-        animate:  { opacity: 1, scale: 1 },
-        exit:     { opacity: 0, scale: 0.9 },
-        transition: { duration: 0.25 },
-        sx: { 
-          backdropFilter: 'blur(8px)', 
-          backgroundColor: 'rgba(10,10,10,0.85)',
-          px: 2, 
-          pb: 2, 
-          borderRadius: 3,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-        },
+      PaperProps={dialogPaperProps}
+      TransitionProps={{
+        enterTransitionDuration: 200,
+        exitTransitionDuration: 100,
       }}
     >
-      <DialogTitle sx={{ 
-        color: 'primary.main', 
-        pb: 1,
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        py: 2,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        mb: 1
-      }}>
+      <DialogTitle sx={dialogTitleSx}>
         <LoginIcon sx={{ mr: 1 }} color="primary" /> Autentificare
       </DialogTitle>
       
@@ -182,21 +257,7 @@ export default function LoginDialog({ open, onClose }) {
         value={activeTab}
         onChange={handleTabChange}
         variant="fullWidth"
-        sx={{ 
-          borderBottom: 1, 
-          borderColor: 'rgba(255,255,255,0.1)',
-          '& .MuiTab-root': { 
-            color: 'rgba(255,255,255,0.7)',
-            textTransform: 'none',
-            fontSize: '0.9rem',
-            '&.Mui-selected': {
-              color: '#fff',
-            }
-          },
-          '& .MuiTabs-indicator': {
-            backgroundColor: 'primary.main',
-          }
-        }}
+        sx={tabsSx}
       >
         <Tab 
           label="Autentificare" 
@@ -210,22 +271,7 @@ export default function LoginDialog({ open, onClose }) {
         />
       </Tabs>
       
-      <DialogContent sx={{
-        '&::-webkit-scrollbar': {
-          width: '8px',
-        },
-        '&::-webkit-scrollbar-track': {
-          background: 'rgba(255, 255, 255, 0.05)',
-          borderRadius: '4px',
-        },
-        '&::-webkit-scrollbar-thumb': {
-          background: 'rgba(255, 255, 255, 0.2)',
-          borderRadius: '4px',
-          '&:hover': {
-            background: 'rgba(255, 255, 255, 0.3)',
-          },
-        },
-      }}>
+      <DialogContent sx={dialogContentSx}>
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           
@@ -364,50 +410,28 @@ export default function LoginDialog({ open, onClose }) {
           disabled={isSubmitting}
           variant="outlined"
           startIcon={<CancelIcon />}
-          sx={{
-            color: 'rgba(255,100,100,0.9)',
-            borderColor: 'rgba(255,100,100,0.5)',
-            textTransform: 'none',
-            '&:hover': {
-              borderColor: 'rgba(255,100,100,0.9)',
-              backgroundColor: 'rgba(255, 0, 0, 0.08)',
-            },
-          }}
+          sx={cancelButtonSx}
         >
           Anulează
         </Button>
         
         {activeTab === 0 ? (
           <Button 
-            onClick={() => setActiveTab(1)}
+            onClick={setTabOne}
             variant="contained" 
             color="primary"
             disabled={isSubmitting}
-            sx={{
-              textTransform: 'none',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              '&:hover': {
-                boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
-              }
-            }}
+            sx={continueButtonSx}
           >
             Continuă
           </Button>
         ) : (
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button 
-              onClick={() => setActiveTab(0)}
+              onClick={setTabZero}
               variant="outlined"
               disabled={isSubmitting}
-              sx={{
-                color: '#fff',
-                borderColor: 'rgba(255,255,255,0.5)',
-                textTransform: 'none',
-                '&:hover': {
-                  borderColor: '#fff',
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                },
-              }}
+              sx={backButtonSx}
             >
               Înapoi
             </Button>
@@ -417,13 +441,7 @@ export default function LoginDialog({ open, onClose }) {
               color="primary"
               disabled={isSubmitting}
               startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : <LoginIcon />}
-              sx={{
-                textTransform: 'none',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                '&:hover': {
-                  boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
-                }
-              }}
+              sx={continueButtonSx}
             >
               Autentificare
             </Button>
@@ -432,4 +450,6 @@ export default function LoginDialog({ open, onClose }) {
       </DialogActions>
     </Dialog>
   );
-} 
+});
+
+export default LoginDialog; 

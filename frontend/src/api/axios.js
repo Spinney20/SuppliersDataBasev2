@@ -1,27 +1,64 @@
 import axios from "axios";
 
 // Determine if we're running in Electron
-const isElectron = window.electronAPI !== undefined;
+const isElectron = window.api !== undefined;
 
-// Get API URL based on environment
-const getApiUrl = () => {
-  // In Electron, we'll use a local server
+// Cache pentru a evita recalcularea URL-ului API la fiecare cerere
+const API_URL = (() => {
+  // În Electron, folosim un server local
   if (isElectron) {
     return 'http://localhost:8000';
   }
   
-  // In development or production web, use the environment variable
+  // În dezvoltare sau producție web, folosim variabila de mediu
   return import.meta.env.VITE_API_URL || 'http://localhost:8000';
-};
+})();
 
+// Creăm o instanță axios optimizată
 export const api = axios.create({
-  baseURL: getApiUrl(),
+  baseURL: API_URL,
+  // Optimizări pentru performanță
+  timeout: 10000, // 10 secunde timeout
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+  // Evităm transformarea inutilă a datelor pentru cereri simple
+  transformRequest: [(data) => {
+    return data === undefined ? data : JSON.stringify(data);
+  }],
 });
 
-// For Electron: Update axios config when DB config changes
+// Adăugăm interceptori pentru a gestiona erorile și a îmbunătăți performanța
+api.interceptors.request.use(
+  (config) => {
+    // Adăugăm un timestamp pentru a evita cache-ul browserului
+    if (config.method === 'get') {
+      config.params = {
+        ...config.params,
+        _t: Date.now()
+      };
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Interceptor pentru răspunsuri pentru a gestiona erorile comune
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Logăm erorile pentru debugging
+    console.error('API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
+// Pentru Electron: Actualizăm configurația axios când se schimbă configurația DB
 if (isElectron) {
-  window.electronAPI.getDbConfig().then(dbConfig => {
-    // You could use this to customize the API URL if needed
+  window.api.getDbConfig().then(dbConfig => {
     console.log('Using database config:', dbConfig);
+  }).catch(err => {
+    console.warn('Failed to get DB config:', err);
   });
 }
