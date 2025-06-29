@@ -6,13 +6,25 @@ const fs = require('fs');
 const electron = require('electron');
 const crypto = require('crypto');
 
+// Cache pentru stocarea datelor în memorie
+let dataCache = null;
+let cachePath = null;
+
 // Vom folosi o implementare simplă pentru stocare până când importăm electron-store
 class SimpleStore {
   constructor(options) {
     const userDataPath = (electron.app || electron.remote.app).getPath('userData');
     this.path = path.join(userDataPath, options.name + '.json');
     this.schema = options.schema || {};
-    this.data = this.parseDataFile();
+    
+    // Folosim cache-ul dacă există și calea e aceeași
+    if (dataCache && cachePath === this.path) {
+      this.data = dataCache;
+    } else {
+      this.data = this.parseDataFile();
+      dataCache = this.data;
+      cachePath = this.path;
+    }
   }
 
   // Get a value from the store
@@ -23,7 +35,14 @@ class SimpleStore {
   // Set a value in the store
   set(key, value) {
     this.data[key] = value;
-    this.writeDataFile();
+    
+    // Actualizăm și cache-ul
+    if (cachePath === this.path) {
+      dataCache = this.data;
+    }
+    
+    // Scriem asincron pentru performanță mai bună
+    this.writeDataFileAsync();
     return true;
   }
 
@@ -35,7 +54,13 @@ class SimpleStore {
   // Delete a key from the store
   delete(key) {
     delete this.data[key];
-    this.writeDataFile();
+    
+    // Actualizăm și cache-ul
+    if (cachePath === this.path) {
+      dataCache = this.data;
+    }
+    
+    this.writeDataFileAsync();
     return true;
   }
 
@@ -52,13 +77,20 @@ class SimpleStore {
     }
   }
 
-  // Write data to the file
+  // Write data to the file (sync)
   writeDataFile() {
     try {
       fs.writeFileSync(this.path, JSON.stringify(this.data, null, 2));
     } catch (error) {
       console.error('Error writing to the store file:', error);
     }
+  }
+  
+  // Write data to the file (async)
+  writeDataFileAsync() {
+    fs.writeFile(this.path, JSON.stringify(this.data, null, 2), err => {
+      if (err) console.error('Error writing to the store file:', err);
+    });
   }
 }
 

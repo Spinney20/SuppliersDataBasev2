@@ -22,6 +22,9 @@ from email import encoders
 import os
 import textwrap
 
+# Import mail module
+from mail import send_email, test_email_connection, OfferRequestIn, EmailResponse, UserData
+
 # --------------------------------------------------------------------
 # 1) Config
 # --------------------------------------------------------------------
@@ -204,30 +207,6 @@ class OfferItem(BaseModel):
     name: str
     quantity: Optional[str] = None
     unit: Optional[str] = None
-
-class UserData(BaseModel):
-    nume: str
-    post: str
-    email: EmailStr
-    smtp_pass: str
-    mobil: str
-    telefon_fix: Optional[str] = None
-
-class OfferRequestIn(BaseModel):
-    type_mode: str  # "material" or "service"
-    subcontract: bool = False
-    subject: str
-    tender_name: str
-    tender_number: str
-    items: List[OfferItem]
-    documents: List[str] = []
-    transfer_link: Optional[str] = None
-    recipient_email: EmailStr
-    user_data: UserData
-
-class EmailResponse(BaseModel):
-    success: bool
-    message: str
 
 # --------------------------------------------------------------------
 # 5) FastAPI
@@ -452,120 +431,20 @@ def update_user_config(config_data: UserConfigIn):
     return user_config.get_complete_user_data()
 
 # ---------------- Email Endpoints -----------------------------
-def generate_email_body(request: OfferRequestIn) -> str:
-    """Generate email body based on the request data"""
-    if request.type_mode == "material":
-        introduction = textwrap.dedent("""\
-            Buna ziua,
-
-            Viarom Construct intentioneaza sa participe la licitatia:
-            "{tender_name}" (numar anunt: {tender_number}).
-
-            In acest context, am aprecia foarte mult sprijinul dumneavoastra in furnizarea unei oferte de pret pentru:
-        """)
-    else:
-        if request.subcontract:
-            introduction = textwrap.dedent("""\
-                Buna ziua,
-
-                Viarom Construct intentioneaza sa participe la licitatia:
-                "{tender_name}" (numar anunt: {tender_number}).
-
-                In acest context, va rugam sa ne transmiteti daca aveti disponibilitatea de a participa alaturi de noi
-                in calitate de subcontractant pentru:
-            """)
-        else:
-            introduction = textwrap.dedent("""\
-                Buna ziua,
-
-                Viarom Construct intentioneaza sa participe la licitatia:
-                "{tender_name}" (numar anunt: {tender_number}).
-
-                In acest context, am aprecia foarte mult sprijinul dumneavoastra
-                in furnizarea unei oferte de pret pentru urmatoarele servicii:
-            """)
-
-    email_body = introduction.format(
-        tender_name=request.tender_name,
-        tender_number=request.tender_number
-    )
-
-    # Add items
-    for item in request.items:
-        if item.quantity and item.unit:
-            email_body += f" - {item.name} – {item.quantity} {item.unit}\n"
-        else:
-            email_body += f" - {item.name}\n"
-
-    # Add documents info if any
-    if request.documents:
-        email_body += "\nPentru a veni in sprijinul formularii unei oferte de pret va atasam:\n"
-        for doc in request.documents:
-            email_body += f" - {doc}\n"
-
-    # Add transfer link if provided
-    if request.transfer_link:
-        email_body += f"\nPentru a putea formula o oferta de pret, va punem la dispozitie link-ul:\n{request.transfer_link}\n"
-
-    # Add signature
-    email_body += "\nCu stima,"
-    
-    return email_body
-
-def send_email(request: OfferRequestIn) -> Dict[str, Any]:
-    """Send email with the offer request"""
-    try:
-        # Get user data
-        user_data = request.user_data
-        
-        # Create email message
-        msg = MIMEMultipart()
-        msg['From'] = user_data.email
-        msg['To'] = request.recipient_email
-        msg['Subject'] = request.subject
-        
-        # Generate email body
-        email_body = generate_email_body(request)
-        
-        # Add signature
-        email_body += f"\n\n{user_data.nume}\n{user_data.post}\n\nVIAROM CONSTRUCT\n\n"
-        email_body += f"Mobil: {user_data.mobil}\n"
-        if user_data.telefon_fix:
-            email_body += f"Telefon: {user_data.telefon_fix}\n"
-        
-        # Add default config data
-        default_config = user_config.DEFAULT_CONFIG
-        email_body += f"Fax: {default_config['fax']}\n"
-        email_body += f"{default_config['adresa']}\n"
-        email_body += f"{default_config['website']}\n\n"
-        email_body += "♻ Please consider the environment before printing this email"
-        
-        # Attach email body
-        msg.attach(MIMEText(email_body, 'plain'))
-        
-        # TODO: Add document attachments when implemented
-        
-        # Set up SMTP server
-        smtp_server = 'smtp.office365.com'
-        smtp_port = 587
-        
-        # Connect to server
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
-        server.login(user_data.email, user_data.smtp_pass)
-        
-        # Send email
-        server.send_message(msg)
-        server.quit()
-        
-        return {"success": True, "message": "Email sent successfully"}
-    except Exception as e:
-        return {"success": False, "message": f"Error sending email: {str(e)}"}
-
 @app.post("/send-offer-request", response_model=EmailResponse)
 def send_offer_request(request: OfferRequestIn):
     """Send an offer request email"""
     result = send_email(request)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    
+    return result
+
+@app.post("/test-email-connection", response_model=EmailResponse)
+def test_email(user_data: UserData):
+    """Test email connection with the provided credentials"""
+    result = test_email_connection(user_data)
     
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["message"])

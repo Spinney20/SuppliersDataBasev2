@@ -486,74 +486,74 @@ export default function Agency() {
           </ButtonGroup>
 
           <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-            {/* Câmpul de căutare existent */}
-            <TextField
-              size="small"
-              variant="outlined"
-              label="Caută..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              InputLabelProps={{
-                shrink: !!search,
-                sx: { color: '#fff', '&.Mui‑focused': { color: '#fff' } },
-              }}
-              sx={{
-                flex: 1.2,
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                borderRadius: 1,
-                '& .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
-                '&:hover .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
-                '& .MuiOutlinedInput-root.Mui‑focused fieldset': { borderColor: 'primary.main' },
-                '& .MuiInputBase-input': { color: '#fff' },
-              }}
-            />
+    {/* Câmpul de căutare existent */}
+    <TextField
+      size="small"
+      variant="outlined"
+      label="Caută..."
+      value={search}
+      onChange={e => setSearch(e.target.value)}
+      InputLabelProps={{
+        shrink: !!search,
+        sx: { color: '#fff', '&.Mui‑focused': { color: '#fff' } },
+      }}
+      sx={{
+        flex: 1.2,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 1,
+        '& .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
+        '&:hover .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
+        '& .MuiOutlinedInput-root.Mui‑focused fieldset': { borderColor: 'primary.main' },
+        '& .MuiInputBase-input': { color: '#fff' },
+      }}
+    />
 
-            {/* Buton "Caută după material" */}
-            <ActionButton
-              variant="contained"
-              color="primary"
-              startIcon={<SearchIcon />}
-              onClick={() => setOpenSearchOffering(true)}
-              sx={{
-                width: '80%',
-                textTransform: 'none'
-              }}
-            >
-              Caută după {type === 'material' ? 'material' : 'serviciu'}
-            </ActionButton>
-          </Box>
+    {/* Buton "Caută după material" */}
+    <ActionButton
+      variant="contained"
+      color="primary"
+      startIcon={<SearchIcon />}
+      onClick={() => setOpenSearchOffering(true)}
+      sx={{
+        width: '80%',
+        textTransform: 'none'
+      }}
+    >
+      Caută după {type === 'material' ? 'material' : 'serviciu'}
+    </ActionButton>
+  </Box>
 
           {/* ── LINIE cu cele două BUTOANE PROFESIONISTE ── */}
-          <ButtonContainer>
-            <ActionButton
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={() => setOpenAddSupp(true)}
-            >
-              Adaugă furnizor
-            </ActionButton>
+        <ButtonContainer>
+          <ActionButton
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenAddSupp(true)}
+          >
+            Adaugă furnizor
+          </ActionButton>
 
-            <ActionButton
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={() => setOpenAddCat(true)}
-              sx={{
-                color: '#fff',                // text alb
-                borderColor: '#fff',          // bordură albă
-                '&:hover': {
-                  borderColor: '#fff',        // rămâne albă la hover
-                  backgroundColor: 'rgba(255,255,255,0.1)', // ușoară umbră albă
-                },
-                '&:focus': {
-                  borderColor: '#fff',
-                  backgroundColor: 'rgba(255,255,255,0.15)',
-                },
-              }}
-            >
-              Adaugă categorie
-            </ActionButton>
-          </ButtonContainer>
+          <ActionButton
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenAddCat(true)}
+            sx={{
+              color: '#fff',                // text alb
+              borderColor: '#fff',          // bordură albă
+              '&:hover': {
+                borderColor: '#fff',        // rămâne albă la hover
+                backgroundColor: 'rgba(255,255,255,0.1)', // ușoară umbră albă
+              },
+              '&:focus': {
+                borderColor: '#fff',
+                backgroundColor: 'rgba(255,255,255,0.15)',
+              },
+            }}
+          >
+            Adaugă categorie
+          </ActionButton>
+        </ButtonContainer>
 
           {/* Buton pentru cerere de ofertă */}
           <ActionButton

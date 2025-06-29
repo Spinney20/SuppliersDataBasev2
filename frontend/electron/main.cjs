@@ -9,6 +9,7 @@ const { store, getUserData, setUserData, clearUserData, getDbConfig, setDbConfig
 let mainWindow;
 let pythonProcess = null;
 let isAppQuitting = false; // Flag pentru a urmări starea de închidere a aplicației
+let isBackendStarted = false; // Flag pentru a urmări dacă backend-ul a pornit
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -17,25 +18,44 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false, // is default value after Electron v5
       contextIsolation: true, // protect against prototype pollution
-      preload: path.join(__dirname, 'preload.cjs')
+      preload: path.join(__dirname, 'preload.cjs'),
+      // Optimizări pentru performanță
+      backgroundThrottling: false, // Previne throttling când aplicația este în background
     },
     icon: path.join(__dirname, '../public/vite.svg'),
     // Folosim stilul standard de fereastră Windows
     frame: true,
     titleBarStyle: 'default',
-    titleBarOverlay: false
+    titleBarOverlay: false,
+    // Optimizări pentru pornire
+    show: false, // Nu afișăm fereastra până când nu e gata
+    backgroundColor: '#121212', // Setăm un fundal pentru a evita flash-ul alb
+  });
+
+  // Arătăm fereastra când e gata pentru a evita flash-ul alb
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    // Pornim backend-ul Python după ce fereastra este afișată
+    // pentru a îmbunătăți experiența utilizatorului
+    if (!isBackendStarted) {
+      startPythonBackend();
+    }
   });
 
   // Load the app
-  const startUrl = isDev 
-    ? 'http://localhost:5173' 
-    : `file://${path.join(__dirname, '../dist/index.html')}`;
+  const startUrl = process.env.ELECTRON_START_URL || 
+    (isDev 
+      ? 'http://localhost:5173' 
+      : `file://${path.join(__dirname, '../dist/index.html')}`);
   
   mainWindow.loadURL(startUrl);
 
   // Open DevTools if in dev mode
   if (isDev) {
-    mainWindow.webContents.openDevTools();
+    // Deschidem DevTools doar după ce aplicația s-a încărcat complet
+    mainWindow.webContents.once('did-finish-load', () => {
+      mainWindow.webContents.openDevTools();
+    });
   }
 
   // Prevenim închiderea imediată a ferestrei pentru a opri mai întâi procesul Python
@@ -60,6 +80,8 @@ function createWindow() {
 
 // Start Python backend
 function startPythonBackend() {
+  if (isBackendStarted) return; // Prevenim pornirea multiplă
+
   const dbConfig = getDbConfig();
   
   // Determine the path to the Python script
@@ -101,16 +123,20 @@ function startPythonBackend() {
       '--port', 
       '8000',
       '--no-access-log', // Eliminăm logurile de acces pentru pornire mai rapidă
-      '--workers', '1'    // Un singur worker pentru aplicația Electron
+      '--workers', '1',   // Un singur worker pentru aplicația Electron
+      '--lifespan', 'off' // Dezactivăm lifespan pentru pornire mai rapidă
     ], {
       cwd: path.join(process.cwd(), '..', 'backend'),
       env: {
         ...process.env,
         DATABASE_URL: dbConfig.url,
         ELECTRON_RUN: '1',
-        PYTHONUNBUFFERED: '1' // Dezactivăm bufferizarea pentru output mai rapid
+        PYTHONUNBUFFERED: '1', // Dezactivăm bufferizarea pentru output mai rapid
+        PYTHONDONTWRITEBYTECODE: '1', // Previne crearea fișierelor .pyc
       }
     });
+
+    isBackendStarted = true;
 
     // Handle stdout
     pythonProcess.stdout.on('data', (data) => {
@@ -132,6 +158,7 @@ function startPythonBackend() {
     // Handle process exit
     pythonProcess.on('close', (code) => {
       console.log(`Python backend exited with code ${code}`);
+      isBackendStarted = false;
       
       // Arătăm eroarea doar dacă procesul nu a fost oprit intenționat și codul de ieșire este diferit de 0 și null
       if (!pythonProcess.intentionallyKilled && code !== 0 && code !== null && mainWindow) {
@@ -147,6 +174,7 @@ function startPythonBackend() {
     // Handle process error
     pythonProcess.on('error', (err) => {
       console.error('Python process error:', err);
+      isBackendStarted = false;
       if (mainWindow) {
         dialog.showErrorBox(
           'Backend Error',
@@ -158,6 +186,7 @@ function startPythonBackend() {
     console.log('Python backend started');
   } catch (error) {
     console.error('Failed to start Python backend:', error);
+    isBackendStarted = false;
     dialog.showErrorBox(
       'Backend Error',
       `Failed to start Python backend: ${error.message}`

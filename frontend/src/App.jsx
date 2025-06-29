@@ -1,14 +1,32 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
-import Home from "./pages/Home";
-import Agency from "./pages/Agency";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { UserProvider } from "./context/UserContext";
 import UserStatus from "./components/UserStatus";
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { CssBaseline } from '@mui/material';
+import { CssBaseline, CircularProgress, Box } from '@mui/material';
 import './App.css';
 
+// Lazy loading pentru paginile principale
+const Home = lazy(() => import("./pages/Home"));
+const Agency = lazy(() => import("./pages/Agency"));
+
+// Loading component pentru Suspense
+const LoadingFallback = () => (
+  <Box 
+    sx={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      height: '100vh',
+      backgroundColor: '#121212'
+    }}
+  >
+    <CircularProgress color="primary" />
+  </Box>
+);
+
+// Optimizat pentru performanță - nu se va recrea la fiecare render
 const theme = createTheme({
   palette: {
     primary: {
@@ -58,12 +76,14 @@ const theme = createTheme({
   },
 });
 
-// Create a client
+// Create a client cu optimizări pentru performanță
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minute
+      cacheTime: 10 * 60 * 1000, // 10 minute
     },
   },
 });
@@ -77,21 +97,29 @@ export default function App() {
   useEffect(() => {
     // If we're in Electron, check that the API is ready
     if (isElectron) {
-      // This could be expanded to check if the Python backend is running
+      // Adăugăm un timeout pentru a evita blocarea UI
+      const timeoutId = setTimeout(() => {
+        setIsElectronReady(true); // Forțăm încărcarea după timeout
+      }, 3000); // 3 secunde timeout maxim
+      
+      // Încercăm să obținem configurația
       window.api.getDbConfig()
         .then(() => {
+          clearTimeout(timeoutId);
           setIsElectronReady(true);
         })
         .catch(err => {
           console.error("Failed to get database config:", err);
-          setIsElectronReady(false);
+          // Nu setăm isElectronReady la false, lăsăm timeout-ul să se ocupe
         });
+        
+      return () => clearTimeout(timeoutId);
     }
   }, []);
 
   // Show loading if Electron is not ready
   if (!isElectronReady) {
-    return <div>Loading application...</div>;
+    return <LoadingFallback />;
   }
 
   return (
@@ -100,10 +128,12 @@ export default function App() {
         <CssBaseline />
         <UserProvider>
           <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/agency/:id" element={<Agency />} />
-            </Routes>
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/agency/:id" element={<Agency />} />
+              </Routes>
+            </Suspense>
             <UserStatus />
           </BrowserRouter>
         </UserProvider>

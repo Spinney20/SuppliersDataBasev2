@@ -11,21 +11,49 @@ import {
   CircularProgress,
   Typography,
   InputAdornment,
-  IconButton
+  IconButton,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { useUser } from '../context/UserContext';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import PersonIcon from '@mui/icons-material/Person';
+import EmailIcon from '@mui/icons-material/Email';
+import LoginIcon from '@mui/icons-material/Login';
+import CancelIcon from '@mui/icons-material/Cancel';
+import { motion } from 'framer-motion';
+
+// Import styles
+const textInputSX = {
+  backgroundColor: 'rgba(255,255,255,0.05)',
+  '& .MuiInputLabel-root':            { color: '#fff' },
+  '& .MuiInputLabel-root.Mui-focused':{ color: 'primary.main' },
+  '& .MuiInputBase-input':            { color: '#fff' },
+  '& .MuiInputBase-input::placeholder': { color: '#fff', opacity: 1 },
+  '& .MuiOutlinedInput-root': {
+      '& fieldset':              { borderColor: '#fff' },
+      '&:hover fieldset':        { borderColor: '#fff' },
+      '&.Mui-focused fieldset':  { borderColor: 'primary.main' },
+  },
+  '& .MuiInputLabel-shrink': {
+      transform: 'translate(14px, -9px) scale(0.75)',
+  }
+};
 
 export default function LoginDialog({ open, onClose }) {
   const { login, isLoggedIn } = useUser();
+  const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState({
-    nume: '',
+    // Date de autentificare
     email: '',
-    smtp_server: '',
-    smtp_port: '',
-    smtp_user: '',
     smtp_pass: '',
+    
+    // Date personale
+    nume: '',
+    post: '',
+    telefon_mobil: '',
+    telefon_fix: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -35,15 +63,16 @@ export default function LoginDialog({ open, onClose }) {
   useEffect(() => {
     if (open) {
       setFormData({
-        nume: '',
         email: '',
-        smtp_server: '',
-        smtp_port: '',
-        smtp_user: '',
         smtp_pass: '',
+        nume: '',
+        post: '',
+        telefon_mobil: '',
+        telefon_fix: '',
       });
       setError('');
       setIsSubmitting(false);
+      setActiveTab(0);
     }
   }, [open]);
 
@@ -62,32 +91,39 @@ export default function LoginDialog({ open, onClose }) {
     }));
   };
 
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     
-    // Basic validation
-    if (!formData.nume.trim()) {
-      setError('Numele este obligatoriu');
-      return;
-    }
-    
+    // Validări de bază
     if (!formData.email.trim()) {
       setError('Email-ul este obligatoriu');
+      setActiveTab(0);
       return;
     }
     
-    // Email validation
+    if (!formData.nume.trim()) {
+      setError('Numele este obligatoriu');
+      setActiveTab(1);
+      return;
+    }
+    
+    // Validare email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       setError('Email-ul nu este valid');
+      setActiveTab(0);
       return;
     }
     
     try {
       setIsSubmitting(true);
       
-      // Call login function from context
+      // Apelează funcția de login din context
       const success = await login(formData);
       
       if (success) {
@@ -113,119 +149,286 @@ export default function LoginDialog({ open, onClose }) {
       onClose={!isSubmitting ? onClose : undefined}
       maxWidth="sm"
       fullWidth
+      PaperComponent={motion.div}
+      PaperProps={{
+        initial:  { opacity: 0, scale: 0.9 },
+        animate:  { opacity: 1, scale: 1 },
+        exit:     { opacity: 0, scale: 0.9 },
+        transition: { duration: 0.25 },
+        sx: { 
+          backdropFilter: 'blur(8px)', 
+          backgroundColor: 'rgba(10,10,10,0.85)',
+          px: 2, 
+          pb: 2, 
+          borderRadius: 3,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+        },
+      }}
     >
-      <DialogTitle>Autentificare</DialogTitle>
-      <DialogContent>
+      <DialogTitle sx={{ 
+        color: 'primary.main', 
+        pb: 1,
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        py: 2,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        mb: 1
+      }}>
+        <LoginIcon sx={{ mr: 1 }} color="primary" /> Autentificare
+      </DialogTitle>
+      
+      <Tabs
+        value={activeTab}
+        onChange={handleTabChange}
+        variant="fullWidth"
+        sx={{ 
+          borderBottom: 1, 
+          borderColor: 'rgba(255,255,255,0.1)',
+          '& .MuiTab-root': { 
+            color: 'rgba(255,255,255,0.7)',
+            textTransform: 'none',
+            fontSize: '0.9rem',
+            '&.Mui-selected': {
+              color: '#fff',
+            }
+          },
+          '& .MuiTabs-indicator': {
+            backgroundColor: 'primary.main',
+          }
+        }}
+      >
+        <Tab 
+          label="Autentificare" 
+          icon={<EmailIcon />} 
+          iconPosition="start"
+        />
+        <Tab 
+          label="Date personale" 
+          icon={<PersonIcon />} 
+          iconPosition="start"
+        />
+      </Tabs>
+      
+      <DialogContent sx={{
+        '&::-webkit-scrollbar': {
+          width: '8px',
+        },
+        '&::-webkit-scrollbar-track': {
+          background: 'rgba(255, 255, 255, 0.05)',
+          borderRadius: '4px',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: 'rgba(255, 255, 255, 0.2)',
+          borderRadius: '4px',
+          '&:hover': {
+            background: 'rgba(255, 255, 255, 0.3)',
+          },
+        },
+      }}>
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           
-          <Typography variant="subtitle1" gutterBottom>
-            Informații personale
-          </Typography>
+          {activeTab === 0 && (
+            <>
+              <Typography variant="subtitle1" gutterBottom sx={{ color: '#fff' }}>
+                Date de autentificare
+              </Typography>
+              
+              <TextField
+                margin="dense"
+                label="Email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                fullWidth
+                required
+                autoFocus
+                disabled={isSubmitting}
+                sx={textInputSX}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+              
+              <TextField
+                margin="dense"
+                label="Parolă email"
+                name="smtp_pass"
+                type={showPassword ? "text" : "password"}
+                value={formData.smtp_pass}
+                onChange={handleChange}
+                fullWidth
+                required
+                disabled={isSubmitting}
+                sx={textInputSX}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={handleTogglePasswordVisibility}
+                        edge="end"
+                        sx={{ color: '#fff' }}
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+              />
+            </>
+          )}
           
-          <TextField
-            margin="dense"
-            label="Nume"
-            name="nume"
-            value={formData.nume}
-            onChange={handleChange}
-            fullWidth
-            required
-            autoFocus
-            disabled={isSubmitting}
-          />
-          
-          <TextField
-            margin="dense"
-            label="Email"
-            name="email"
-            type="email"
-            value={formData.email}
-            onChange={handleChange}
-            fullWidth
-            required
-            disabled={isSubmitting}
-          />
-          
-          <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
-            Configurare email (opțional)
-          </Typography>
-          <Typography variant="caption" color="text.secondary" paragraph>
-            Aceste date sunt necesare pentru a trimite cereri de ofertă direct din aplicație
-          </Typography>
-          
-          <TextField
-            margin="dense"
-            label="Server SMTP"
-            name="smtp_server"
-            value={formData.smtp_server}
-            onChange={handleChange}
-            fullWidth
-            disabled={isSubmitting}
-            placeholder="ex: smtp.gmail.com"
-          />
-          
-          <TextField
-            margin="dense"
-            label="Port SMTP"
-            name="smtp_port"
-            value={formData.smtp_port}
-            onChange={handleChange}
-            fullWidth
-            disabled={isSubmitting}
-            placeholder="ex: 587"
-          />
-          
-          <TextField
-            margin="dense"
-            label="Utilizator SMTP"
-            name="smtp_user"
-            value={formData.smtp_user}
-            onChange={handleChange}
-            fullWidth
-            disabled={isSubmitting}
-            placeholder="De obicei adresa de email"
-          />
-          
-          <TextField
-            margin="dense"
-            label="Parolă SMTP"
-            name="smtp_pass"
-            type={showPassword ? "text" : "password"}
-            value={formData.smtp_pass}
-            onChange={handleChange}
-            fullWidth
-            disabled={isSubmitting}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={handleTogglePasswordVisibility}
-                    edge="end"
-                  >
-                    {showPassword ? <VisibilityOff /> : <Visibility />}
-                  </IconButton>
-                </InputAdornment>
-              )
-            }}
-          />
+          {activeTab === 1 && (
+            <>
+              <Typography variant="subtitle1" gutterBottom sx={{ color: '#fff' }}>
+                Date personale
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }} paragraph>
+                Aceste date vor apărea în antetul email-urilor trimise
+              </Typography>
+              
+              <TextField
+                margin="dense"
+                label="Nume complet"
+                name="nume"
+                value={formData.nume}
+                onChange={handleChange}
+                fullWidth
+                required
+                disabled={isSubmitting}
+                sx={textInputSX}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+              
+              <TextField
+                margin="dense"
+                label="Poziție / Funcție"
+                name="post"
+                value={formData.post}
+                onChange={handleChange}
+                fullWidth
+                disabled={isSubmitting}
+                sx={textInputSX}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+              
+              <TextField
+                margin="dense"
+                label="Telefon mobil"
+                name="telefon_mobil"
+                value={formData.telefon_mobil}
+                onChange={handleChange}
+                fullWidth
+                disabled={isSubmitting}
+                sx={textInputSX}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+              
+              <TextField
+                margin="dense"
+                label="Telefon fix"
+                name="telefon_fix"
+                value={formData.telefon_fix}
+                onChange={handleChange}
+                fullWidth
+                disabled={isSubmitting}
+                sx={textInputSX}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+            </>
+          )}
         </Box>
       </DialogContent>
-      <DialogActions>
+      
+      <DialogActions sx={{ 
+        px: 3, 
+        py: 2, 
+        justifyContent: 'space-between',
+        mt: 1
+      }}>
         <Button 
           onClick={onClose} 
           disabled={isSubmitting}
+          variant="outlined"
+          startIcon={<CancelIcon />}
+          sx={{
+            color: 'rgba(255,100,100,0.9)',
+            borderColor: 'rgba(255,100,100,0.5)',
+            textTransform: 'none',
+            '&:hover': {
+              borderColor: 'rgba(255,100,100,0.9)',
+              backgroundColor: 'rgba(255, 0, 0, 0.08)',
+            },
+          }}
         >
           Anulează
         </Button>
-        <Button 
-          onClick={handleSubmit}
-          variant="contained" 
-          color="primary"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? <CircularProgress size={24} /> : 'Autentificare'}
-        </Button>
+        
+        {activeTab === 0 ? (
+          <Button 
+            onClick={() => setActiveTab(1)}
+            variant="contained" 
+            color="primary"
+            disabled={isSubmitting}
+            sx={{
+              textTransform: 'none',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              '&:hover': {
+                boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
+              }
+            }}
+          >
+            Continuă
+          </Button>
+        ) : (
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button 
+              onClick={() => setActiveTab(0)}
+              variant="outlined"
+              disabled={isSubmitting}
+              sx={{
+                color: '#fff',
+                borderColor: 'rgba(255,255,255,0.5)',
+                textTransform: 'none',
+                '&:hover': {
+                  borderColor: '#fff',
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              Înapoi
+            </Button>
+            <Button 
+              onClick={handleSubmit}
+              variant="contained" 
+              color="primary"
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : <LoginIcon />}
+              sx={{
+                textTransform: 'none',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                '&:hover': {
+                  boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
+                }
+              }}
+            >
+              Autentificare
+            </Button>
+          </Box>
+        )}
       </DialogActions>
     </Dialog>
   );
