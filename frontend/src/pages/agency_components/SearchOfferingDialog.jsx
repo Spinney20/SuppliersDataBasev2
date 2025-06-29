@@ -86,16 +86,31 @@ const SearchOfferingDialog = ({
           autoFocus
           fullWidth
           variant="outlined"
-          label={`Caută ${type === 'material' ? 'materiale' : 'servicii'}`}
+          label={`Caută furnizor  ${type === 'material' ? 'materiale' : 'servicii'}`}
           value={searchTerm}
           onChange={handleSearch}
           InputProps={{
             startAdornment: <SearchIcon sx={{ mr: 1, color: 'rgba(255,255,255,0.7)' }} />,
           }}
+          InputLabelProps={{
+               sx: {
+                 /* ── poziția etichetei în starea normală ── */
+                 transform: 'translate(14px, 22px) scale(1)',  // default e 16 px
+            
+                 /* ── poziția când eticheta devine “shrink” (focus/text) ── */
+                 '&.MuiInputLabel-shrink': {
+                   transform: 'translate(14px, -2px) scale(0.75)', // valoarea MUI default
+                 },
+               },
+             }}
           sx={{
             mb: 3,
             backgroundColor: 'rgba(255,255,255,0.05)',
             '& .MuiInputBase-input': { color: '#fff' },
+            '& label.MuiInputLabel-outlined:not(.MuiInputLabel-shrink)': {
+              /* default Y = 16px → îl coborâm la 22px (+6px) */
+              transform: 'translate(14px, 22px) scale(1)',
+            },
             '& .MuiOutlinedInput-root': {
               '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' },
               '&:hover fieldset': { borderColor: '#fff' },
@@ -104,7 +119,7 @@ const SearchOfferingDialog = ({
             '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
             '& .MuiInputLabel-root.Mui-focused': { color: 'primary.main' },
           }}
-          placeholder="Ex: beton, ciment, lemn, etc."
+          placeholder="Ex: Balast, Parapet H1, Aripa prefabricata A2 etc."
         />
         
         {isLoading && (
