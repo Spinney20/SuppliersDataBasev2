@@ -3,7 +3,8 @@ const path = require('path');
 const { PythonShell } = require('python-shell');
 const fs = require('fs');
 const isDev = require('./is-dev.cjs');
-const { getDbConfig, saveDbConfig, testConnection } = require('./db-config.cjs');
+const dbConfig = require('./db-config.cjs');
+const { store, getUserData, setUserData, clearUserData, getDbConfig, setDbConfig } = require('./store.cjs');
 
 let mainWindow;
 let pythonProcess = null;
@@ -14,8 +15,8 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: true,
+      nodeIntegration: false, // is default value after Electron v5
+      contextIsolation: true, // protect against prototype pollution
       preload: path.join(__dirname, 'preload.cjs')
     },
     icon: path.join(__dirname, '../public/vite.svg'),
@@ -301,10 +302,10 @@ ipcMain.handle('get-db-config', () => {
 ipcMain.handle('save-db-config', async (event, config) => {
   try {
     // Test the connection before saving
-    await testConnection(config);
+    await dbConfig.testConnection(config);
     
     // Save the configuration if connection test passes
-    saveDbConfig(config);
+    dbConfig.saveDbConfig(config);
     
     // Restart Python backend with new config
     stopPythonBackend();
@@ -361,6 +362,29 @@ app.whenReady().then(() => {
     startPythonBackend();
     createWindow();
   }
+  
+  // Set up IPC handlers for database config
+  ipcMain.handle('getDbConfig', () => {
+    return getDbConfig();
+  });
+  
+  ipcMain.handle('setDbConfig', (event, config) => {
+    return setDbConfig(config);
+  });
+  
+  // Set up IPC handlers for user data
+  ipcMain.handle('getUserData', () => {
+    return getUserData();
+  });
+  
+  ipcMain.handle('setUserData', (event, userData) => {
+    return setUserData(userData);
+  });
+  
+  ipcMain.handle('clearUserData', () => {
+    clearUserData();
+    return null;
+  });
 });
 
 app.on('window-all-closed', () => {

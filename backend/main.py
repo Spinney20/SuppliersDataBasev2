@@ -1,5 +1,5 @@
 # main.py  – rulează cu:  python -m uvicorn main:app --reload
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from enum import Enum as PyEnum
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import or_
@@ -11,6 +11,16 @@ from pydantic_settings import BaseSettings
 from sqlalchemy import Column, Integer, String, ForeignKey, create_engine, UniqueConstraint, Table
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, Session
 from fastapi.middleware.cors import CORSMiddleware
+
+# Import user configuration module
+import user_config
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import os
+import textwrap
 
 # --------------------------------------------------------------------
 # 1) Config
@@ -170,6 +180,55 @@ class SupplierOut(SupplierIn):
     offerings: List[OfferingOut]
     model_config = {"from_attributes": True}
 
+# User configuration models
+class UserConfigIn(BaseModel):
+    nume: str
+    post: str
+    email: EmailStr
+    smtp_pass: str
+    mobil: str
+    telefon_fix: Optional[str] = None
+
+class UserConfigOut(BaseModel):
+    nume: str
+    post: str
+    email: EmailStr
+    mobil: str
+    telefon_fix: Optional[str] = None
+    fax: str
+    adresa: str
+    website: str
+
+# Email models
+class OfferItem(BaseModel):
+    name: str
+    quantity: Optional[str] = None
+    unit: Optional[str] = None
+
+class UserData(BaseModel):
+    nume: str
+    post: str
+    email: EmailStr
+    smtp_pass: str
+    mobil: str
+    telefon_fix: Optional[str] = None
+
+class OfferRequestIn(BaseModel):
+    type_mode: str  # "material" or "service"
+    subcontract: bool = False
+    subject: str
+    tender_name: str
+    tender_number: str
+    items: List[OfferItem]
+    documents: List[str] = []
+    transfer_link: Optional[str] = None
+    recipient_email: EmailStr
+    user_data: UserData
+
+class EmailResponse(BaseModel):
+    success: bool
+    message: str
+
 # --------------------------------------------------------------------
 # 5) FastAPI
 # --------------------------------------------------------------------
@@ -249,24 +308,20 @@ def suppliers_by_category(
 ):
     return (
         db.query(Supplier)
-           .join(                             # JOIN pe tabela punte
-              supplier_category,
-              Supplier.id == supplier_category.c.supplier_id
-          ).filter(
-              Supplier.agency_id == agency_id,
-              supplier_category.c.category_id == cat_id
-          )
+          .filter(Supplier.agency_id == agency_id)
+          .filter(Supplier.categories.any(Category.id == cat_id))
           .order_by(Supplier.name)
           .all()
     )
 
-# --------------- Furnizori pe agenție -------------------------------
 @app.get("/agencies/{agency_id}/suppliers", response_model=list[SupplierOut])
 def suppliers_by_agency(agency_id: int, db: Session = Depends(get_db)):
-    return (db.query(Supplier)
-              .filter(Supplier.agency_id == agency_id)
-              .order_by(Supplier.name)
-              .all())
+    return (
+        db.query(Supplier)
+          .filter(Supplier.agency_id == agency_id)
+          .order_by(Supplier.name)
+          .all()
+    )
 
 @app.post("/agencies/{agency_id}/suppliers", response_model=SupplierOut)
 def add_supplier_for_agency(
@@ -274,91 +329,97 @@ def add_supplier_for_agency(
     s: SupplierIn,
     db: Session = Depends(get_db)
 ):
-    if not db.get(Agency, agency_id):
+    # verificăm dacă agenția există
+    if not db.query(Agency).filter_by(id=agency_id).first():
         raise HTTPException(404, "Agency not found")
 
-    sp = Supplier(
-        agency_id = agency_id,
-        name      = s.name,
-        office_email = s.office_email,
-        office_phone = s.office_phone,
+    # verificăm dacă toate categoriile există
+    cat_ids = s.category_ids
+    cats = db.query(Category).filter(Category.id.in_(cat_ids)).all()
+    if len(cats) != len(cat_ids):
+        raise HTTPException(400, "One or more categories not found")
+
+    # creăm furnizorul
+    supplier = Supplier(
+        agency_id=agency_id,
+        name=s.name,
+        office_email=s.office_email,
+        office_phone=s.office_phone,
+        categories=cats,
     )
-    # mapăm categoriile
-    cats = db.query(Category).filter(Category.id.in_(s.category_ids)).all()
-    if len(cats) != len(s.category_ids):
-        raise HTTPException(400, "One or more category_ids are invalid")
-    sp.categories = cats
-    db.add(sp); db.commit(); db.refresh(sp)
 
+    # adăugăm contactele
     for c in s.contacts:
-        # Use model_dump() for Pydantic v2 compatibility
-        contact_data = c.dict() if hasattr(c, 'dict') else c.__dict__
-        db.add(Contact(**contact_data, supplier_id=sp.id))
-    
-    for off in s.offerings:
-        # Use model_dump() for Pydantic v2 compatibility
-        offering_data = off.dict() if hasattr(off, 'dict') else off.__dict__
-        db.add(Offering(**offering_data, supplier=sp))
-    
-    db.commit()
-    db.refresh(sp)
-    return sp
+        contact = Contact(**c.model_dump())
+        supplier.contacts.append(contact)
 
-# ----------- editare / ștergere furnizor ----------------------------
+    # adăugăm ofertele
+    for o in s.offerings:
+        offering = Offering(**o.model_dump())
+        supplier.offerings.append(offering)
+
+    db.add(supplier)
+    db.commit()
+    db.refresh(supplier)
+    return supplier
+
 @app.put("/suppliers/{supplier_id}", response_model=SupplierOut)
 def update_supplier(
     supplier_id: int,
     s: SupplierIn,
     db: Session = Depends(get_db)
 ):
-    sp = db.get(Supplier, supplier_id)
-    if not sp:
+    # verificăm dacă furnizorul există
+    supplier = db.query(Supplier).filter_by(id=supplier_id).first()
+    if not supplier:
         raise HTTPException(404, "Supplier not found")
 
-    for key, val in s.dict(exclude={"contacts", "category_ids", "offerings"}).items():
-         setattr(sp, key, val)
+    # verificăm dacă toate categoriile există
+    cat_ids = s.category_ids
+    cats = db.query(Category).filter(Category.id.in_(cat_ids)).all()
+    if len(cats) != len(cat_ids):
+        raise HTTPException(400, "One or more categories not found")
 
-    # rescriem categoriile
-    cats = db.query(Category).filter(Category.id.in_(s.category_ids)).all()
-    if len(cats) != len(s.category_ids):
-        raise HTTPException(400, "One or more category_ids are invalid")
-    sp.categories = cats
+    # actualizăm furnizorul
+    supplier.name = s.name
+    supplier.office_email = s.office_email
+    supplier.office_phone = s.office_phone
+    supplier.categories = cats
 
-    # rescriem contactele
-    db.query(Contact).filter_by(supplier_id=sp.id).delete()
+    # ștergem contactele existente
+    db.query(Contact).filter_by(supplier_id=supplier_id).delete()
+    # adăugăm contactele noi
     for c in s.contacts:
-        contact_data = c.dict() if hasattr(c, 'dict') else c.__dict__
-        db.add(Contact(**contact_data, supplier_id=sp.id))
-    
-    # rescriem offerings
-    db.query(Offering).filter_by(supplier_id=sp.id).delete()
-    for off in s.offerings:
-        offering_data = off.dict() if hasattr(off, 'dict') else off.__dict__
-        db.add(Offering(**offering_data, supplier=sp))
-    
+        contact = Contact(**c.model_dump(), supplier_id=supplier_id)
+        db.add(contact)
+
+    # ștergem ofertele existente
+    db.query(Offering).filter_by(supplier_id=supplier_id).delete()
+    # adăugăm ofertele noi
+    for o in s.offerings:
+        offering = Offering(**o.model_dump(), supplier_id=supplier_id)
+        db.add(offering)
+
     db.commit()
-    db.refresh(sp)
-    return sp
+    db.refresh(supplier)
+    return supplier
 
 @app.delete("/suppliers/{supplier_id}", status_code=204)
 def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
-     sp = db.get(Supplier, supplier_id)
-     if not sp:
-         raise HTTPException(404, "Supplier not found")
+    # verificăm dacă furnizorul există
+    supplier = db.query(Supplier).filter_by(id=supplier_id).first()
+    if not supplier:
+        raise HTTPException(404, "Supplier not found")
 
-     # 1) Golește legăturile many-to-many
-     sp.categories = []
-     db.commit()
-
-     # 2) Șterge obiectul Supplier
-     db.delete(sp)
-     db.commit()
+    # ștergem furnizorul
+    db.delete(supplier)
+    db.commit()
+    return None
 
 @app.get("/suppliers/{supplier_id}/offerings", response_model=list[OfferingOut])
 def list_offerings(supplier_id: int, db: Session = Depends(get_db)):
     return db.query(Offering).filter_by(supplier_id=supplier_id).all()
 
-# ----------- search suppliers by offering ----------------------------
 @app.get("/agencies/{agency_id}/search/offerings", response_model=list[SupplierOut])
 def search_suppliers_by_offering(
     agency_id: int, 
@@ -366,31 +427,147 @@ def search_suppliers_by_offering(
     type: Optional[SupplierType] = None,
     db: Session = Depends(get_db)
 ):
-    """
-    Search suppliers by offering name in a specific agency.
-    Optionally filter by supplier type (material/service).
-    """
     query = (
         db.query(Supplier)
-        .join(Offering, Supplier.id == Offering.supplier_id)
-        .filter(
-            Supplier.agency_id == agency_id,
-            Offering.name.ilike(f"%{q}%")
-        )
+        .join(Offering)
+        .filter(Supplier.agency_id == agency_id)
+        .filter(Offering.name.ilike(f"%{q}%"))
     )
     
-    # If type is provided, filter suppliers by categories of that type
     if type:
-        query = (
-            query.join(
-                supplier_category,
-                Supplier.id == supplier_category.c.supplier_id
-            )
-            .join(
-                Category,
-                Category.id == supplier_category.c.category_id
-            )
-            .filter(Category.type == type)
-        )
+        query = query.join(supplier_category).join(Category).filter(Category.type == type)
     
-    return query.distinct().order_by(Supplier.name).all()
+    return query.distinct().all()
+
+# ---------------- User Configuration Endpoints -----------------------------
+@app.get("/user-config", response_model=UserConfigOut)
+def get_user_config():
+    """Get user configuration data"""
+    return user_config.get_complete_user_data()
+
+@app.post("/user-config", response_model=UserConfigOut)
+def update_user_config(config_data: UserConfigIn):
+    """Update user configuration data"""
+    user_config.save_user_config(config_data.model_dump())
+    return user_config.get_complete_user_data()
+
+# ---------------- Email Endpoints -----------------------------
+def generate_email_body(request: OfferRequestIn) -> str:
+    """Generate email body based on the request data"""
+    if request.type_mode == "material":
+        introduction = textwrap.dedent("""\
+            Buna ziua,
+
+            Viarom Construct intentioneaza sa participe la licitatia:
+            "{tender_name}" (numar anunt: {tender_number}).
+
+            In acest context, am aprecia foarte mult sprijinul dumneavoastra in furnizarea unei oferte de pret pentru:
+        """)
+    else:
+        if request.subcontract:
+            introduction = textwrap.dedent("""\
+                Buna ziua,
+
+                Viarom Construct intentioneaza sa participe la licitatia:
+                "{tender_name}" (numar anunt: {tender_number}).
+
+                In acest context, va rugam sa ne transmiteti daca aveti disponibilitatea de a participa alaturi de noi
+                in calitate de subcontractant pentru:
+            """)
+        else:
+            introduction = textwrap.dedent("""\
+                Buna ziua,
+
+                Viarom Construct intentioneaza sa participe la licitatia:
+                "{tender_name}" (numar anunt: {tender_number}).
+
+                In acest context, am aprecia foarte mult sprijinul dumneavoastra
+                in furnizarea unei oferte de pret pentru urmatoarele servicii:
+            """)
+
+    email_body = introduction.format(
+        tender_name=request.tender_name,
+        tender_number=request.tender_number
+    )
+
+    # Add items
+    for item in request.items:
+        if item.quantity and item.unit:
+            email_body += f" - {item.name} – {item.quantity} {item.unit}\n"
+        else:
+            email_body += f" - {item.name}\n"
+
+    # Add documents info if any
+    if request.documents:
+        email_body += "\nPentru a veni in sprijinul formularii unei oferte de pret va atasam:\n"
+        for doc in request.documents:
+            email_body += f" - {doc}\n"
+
+    # Add transfer link if provided
+    if request.transfer_link:
+        email_body += f"\nPentru a putea formula o oferta de pret, va punem la dispozitie link-ul:\n{request.transfer_link}\n"
+
+    # Add signature
+    email_body += "\nCu stima,"
+    
+    return email_body
+
+def send_email(request: OfferRequestIn) -> Dict[str, Any]:
+    """Send email with the offer request"""
+    try:
+        # Get user data
+        user_data = request.user_data
+        
+        # Create email message
+        msg = MIMEMultipart()
+        msg['From'] = user_data.email
+        msg['To'] = request.recipient_email
+        msg['Subject'] = request.subject
+        
+        # Generate email body
+        email_body = generate_email_body(request)
+        
+        # Add signature
+        email_body += f"\n\n{user_data.nume}\n{user_data.post}\n\nVIAROM CONSTRUCT\n\n"
+        email_body += f"Mobil: {user_data.mobil}\n"
+        if user_data.telefon_fix:
+            email_body += f"Telefon: {user_data.telefon_fix}\n"
+        
+        # Add default config data
+        default_config = user_config.DEFAULT_CONFIG
+        email_body += f"Fax: {default_config['fax']}\n"
+        email_body += f"{default_config['adresa']}\n"
+        email_body += f"{default_config['website']}\n\n"
+        email_body += "♻ Please consider the environment before printing this email"
+        
+        # Attach email body
+        msg.attach(MIMEText(email_body, 'plain'))
+        
+        # TODO: Add document attachments when implemented
+        
+        # Set up SMTP server
+        smtp_server = 'smtp.office365.com'
+        smtp_port = 587
+        
+        # Connect to server
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(user_data.email, user_data.smtp_pass)
+        
+        # Send email
+        server.send_message(msg)
+        server.quit()
+        
+        return {"success": True, "message": "Email sent successfully"}
+    except Exception as e:
+        return {"success": False, "message": f"Error sending email: {str(e)}"}
+
+@app.post("/send-offer-request", response_model=EmailResponse)
+def send_offer_request(request: OfferRequestIn):
+    """Send an offer request email"""
+    result = send_email(request)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    
+    return result

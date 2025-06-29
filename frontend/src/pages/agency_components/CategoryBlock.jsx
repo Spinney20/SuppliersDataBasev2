@@ -2,10 +2,10 @@ import { memo } from 'react';
 import { Box, Typography, IconButton } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { useSuppliersByCat } from '../../api/queries';
+import { useSuppliers } from '../../api/queries';
 
 const CategoryBlock = memo(({ cat, expanded, toggle, agencyId, search, onSupplierClick }) => {
-  const { data: supp = [] } = useSuppliersByCat(agencyId, cat.id);
+  const { data: supp = [] } = useSuppliers(agencyId, cat.id);
   const filteredSup = supp.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );

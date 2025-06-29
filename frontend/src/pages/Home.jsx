@@ -22,6 +22,8 @@ import {
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { motion, AnimatePresence } from 'framer-motion';
+import LoginDialog from '../components/LoginDialog';
+import { useUser } from '../context/UserContext';
 
 const images = import.meta.glob('../assets/*.png', { eager: true, import: 'default' });
 // rezultatul e: { "../assets/brasov.png":"/assets/brasov.xxx.png", … }
@@ -65,6 +67,8 @@ export default function Home() {
   const nav = useNavigate();
   const [clickedId, setClickedId] = useState(null);
   const [dbConfigOpen, setDbConfigOpen] = useState(false);
+  const [openLoginDialog, setOpenLoginDialog] = useState(false);
+  const { isLoggedIn } = useUser();
   const [dbConfig, setDbConfig] = useState({
     type: 'local',
     url: 'postgresql://user:pass@localhost:5432/furnizori_dev',
@@ -369,6 +373,12 @@ export default function Home() {
           <Button onClick={handleDbConfigSave} variant="contained">Salvează</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Login Dialog */}
+      <LoginDialog
+        open={openLoginDialog}
+        onClose={() => setOpenLoginDialog(false)}
+      />
     </Box>
   );
 }

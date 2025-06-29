@@ -5,7 +5,55 @@ const { dialog } = require('electron');
 const { PythonShell } = require('python-shell');
 const path = require('path');
 const fs = require('fs');
-const Store = require('./store.cjs');
+
+// Implementare simplă pentru stocare
+class SimpleStore {
+  constructor(options) {
+    const electron = require('electron');
+    const userDataPath = (electron.app || electron.remote.app).getPath('userData');
+    this.path = path.join(userDataPath, options.name + '.json');
+    this.data = this.parseDataFile();
+  }
+
+  // Get a value from the store
+  get(key) {
+    return this.data[key];
+  }
+
+  // Set a value in the store
+  set(key, value) {
+    this.data[key] = value;
+    this.writeDataFile();
+    return true;
+  }
+
+  // Check if a key exists in the store
+  has(key) {
+    return Object.prototype.hasOwnProperty.call(this.data, key);
+  }
+
+  // Parse the data file
+  parseDataFile() {
+    try {
+      if (fs.existsSync(this.path)) {
+        return JSON.parse(fs.readFileSync(this.path, 'utf8'));
+      }
+      return {};
+    } catch (error) {
+      console.error('Error reading or parsing the store file:', error);
+      return {};
+    }
+  }
+
+  // Write data to the file
+  writeDataFile() {
+    try {
+      fs.writeFileSync(this.path, JSON.stringify(this.data, null, 2));
+    } catch (error) {
+      console.error('Error writing to the store file:', error);
+    }
+  }
+}
 
 // Try to read DATABASE_URL from .env file in backend directory
 function getEnvDatabaseUrl() {
@@ -25,26 +73,12 @@ function getEnvDatabaseUrl() {
 }
 
 // Initialize store for database configuration
-const store = new Store({
-  name: 'db-config',
-  schema: {
-    dbConfig: {
-      type: 'object',
-      properties: {
-        type: { type: 'string', enum: ['local', 'neon', 'server'] },
-        url: { type: 'string' },
-        host: { type: 'string' },
-        port: { type: 'number' },
-        database: { type: 'string' },
-        username: { type: 'string' },
-        password: { type: 'string' }
-      }
-    }
-  }
+const dbStore = new SimpleStore({
+  name: 'db-config'
 });
 
 // Set default database config if not exists
-if (!store.has('dbConfig')) {
+if (!dbStore.has('dbConfig')) {
   // Get database URL from environment
   const dbUrl = getEnvDatabaseUrl();
   
@@ -64,7 +98,7 @@ if (!store.has('dbConfig')) {
     console.error('Error parsing database URL:', error);
   }
   
-  store.set('dbConfig', {
+  dbStore.set('dbConfig', {
     type: 'local',
     url: dbUrl,
     host,
@@ -138,7 +172,7 @@ except Exception as e:
  * @returns {Object} - Database configuration
  */
 function getDbConfig() {
-  return store.get('dbConfig');
+  return dbStore.get('dbConfig');
 }
 
 /**
@@ -146,7 +180,7 @@ function getDbConfig() {
  * @param {Object} config - Database configuration
  */
 function saveDbConfig(config) {
-  store.set('dbConfig', config);
+  dbStore.set('dbConfig', config);
 }
 
 module.exports = {

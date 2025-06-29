@@ -15,11 +15,13 @@ import ReplyIcon           from '@mui/icons-material/Reply';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AddIcon from '@mui/icons-material/Add';
+import EmailIcon from '@mui/icons-material/Email';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../api/axios';
 import { useCategories } from '../api/queries';
 import { useNavigate } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
+import { useUser } from '../context/UserContext';
 
 // Componente personalizate
 import { ButtonContainer, ActionButton, scrollbarStyles } from './agency_components/styles';
@@ -28,12 +30,15 @@ import AddSupplierDialog from './agency_components/AddSupplierDialog';
 import AddCategoryDialog from './agency_components/AddCategoryDialog';
 import SupplierDetailsDialog from './agency_components/SupplierDetailsDialog';
 import SearchOfferingDialog from './agency_components/SearchOfferingDialog';
+import LoginDialog from '../components/LoginDialog';
+import OfferRequestDialog from '../components/OfferRequestDialog';
 import SearchIcon from '@mui/icons-material/Search';
 
 /* ────────────────────────────────────────────────────────── */
 export default function Agency() {
   const { id }   = useParams();
   const agencyId = Number(id);
+  const { isLoggedIn } = useUser();
 
   /* -------------- state -------------- */
   const [type, setType]         = useState('material');
@@ -45,6 +50,8 @@ export default function Agency() {
   const [openAddSupp, setOpenAddSupp] = useState(false);
   const [openSupplierDetails, setOpenSupplierDetails] = useState(false);
   const [openSearchOffering, setOpenSearchOffering] = useState(false);
+  const [openLoginDialog, setOpenLoginDialog] = useState(false);
+  const [openOfferRequest, setOpenOfferRequest] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
   /* form Add Category */
@@ -260,7 +267,7 @@ export default function Agency() {
 
   const BackButton = styled(IconButton)(({ theme }) => ({
     position: 'absolute',
-    top: theme.spacing(2),          // 16 px
+    top: theme.spacing(2),          // 16 px
     left: theme.spacing(2),
     color: '#fff',                  // icon alb
     backgroundColor: 'transparent', // fără fundal
@@ -332,6 +339,15 @@ export default function Agency() {
 
   const handleUpdateSupplier = (updatedSupplier) => {
     updateSupplier.mutate(updatedSupplier);
+  };
+
+  const handleOfferRequestClick = () => {
+    if (!isLoggedIn) {
+      setOpenLoginDialog(true);
+      return;
+    }
+    
+    setOpenOfferRequest(true);
   };
 
   /* ───────────────────────── render ───────────────────────── */
@@ -470,76 +486,91 @@ export default function Agency() {
           </ButtonGroup>
 
           <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-    {/* Câmpul de căutare existent */}
-    <TextField
-      size="small"
-      variant="outlined"
-      label="Caută..."
-      value={search}
-      onChange={e => setSearch(e.target.value)}
-      InputLabelProps={{
-        shrink: !!search,
-        sx: { color: '#fff', '&.Mui‑focused': { color: '#fff' } },
-      }}
-      sx={{
-        flex: 1.2,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 1,
-        '& .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
-        '&:hover .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
-        '& .MuiOutlinedInput-root.Mui‑focused fieldset': { borderColor: 'primary.main' },
-        '& .MuiInputBase-input': { color: '#fff' },
-      }}
-    />
+            {/* Câmpul de căutare existent */}
+            <TextField
+              size="small"
+              variant="outlined"
+              label="Caută..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              InputLabelProps={{
+                shrink: !!search,
+                sx: { color: '#fff', '&.Mui‑focused': { color: '#fff' } },
+              }}
+              sx={{
+                flex: 1.2,
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                borderRadius: 1,
+                '& .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
+                '&:hover .MuiOutlinedInput-root fieldset': { borderColor: '#fff' },
+                '& .MuiOutlinedInput-root.Mui‑focused fieldset': { borderColor: 'primary.main' },
+                '& .MuiInputBase-input': { color: '#fff' },
+              }}
+            />
 
-    {/* Buton "Caută după material" */}
-    <ActionButton
-      variant="contained"
-      color="primary"
-      startIcon={<SearchIcon />}
-      onClick={() => setOpenSearchOffering(true)}
-      sx={{
-        width: '80%',
-        textTransform: 'none'
-      }}
-    >
-      Caută după {type === 'material' ? 'material' : 'serviciu'}
-    </ActionButton>
-  </Box>
+            {/* Buton "Caută după material" */}
+            <ActionButton
+              variant="contained"
+              color="primary"
+              startIcon={<SearchIcon />}
+              onClick={() => setOpenSearchOffering(true)}
+              sx={{
+                width: '80%',
+                textTransform: 'none'
+              }}
+            >
+              Caută după {type === 'material' ? 'material' : 'serviciu'}
+            </ActionButton>
+          </Box>
 
           {/* ── LINIE cu cele două BUTOANE PROFESIONISTE ── */}
-        <ButtonContainer>
+          <ButtonContainer>
+            <ActionButton
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={() => setOpenAddSupp(true)}
+            >
+              Adaugă furnizor
+            </ActionButton>
+
+            <ActionButton
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => setOpenAddCat(true)}
+              sx={{
+                color: '#fff',                // text alb
+                borderColor: '#fff',          // bordură albă
+                '&:hover': {
+                  borderColor: '#fff',        // rămâne albă la hover
+                  backgroundColor: 'rgba(255,255,255,0.1)', // ușoară umbră albă
+                },
+                '&:focus': {
+                  borderColor: '#fff',
+                  backgroundColor: 'rgba(255,255,255,0.15)',
+                },
+              }}
+            >
+              Adaugă categorie
+            </ActionButton>
+          </ButtonContainer>
+
+          {/* Buton pentru cerere de ofertă */}
           <ActionButton
             variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => setOpenAddSupp(true)}
-          >
-            Adaugă furnizor
-          </ActionButton>
-
-          <ActionButton
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={() => setOpenAddCat(true)}
+            color="secondary"
+            startIcon={<EmailIcon />}
+            onClick={handleOfferRequestClick}
             sx={{
-              color: '#fff',                // text alb
-              borderColor: '#fff',          // bordură albă
+              mt: 1,
+              backgroundColor: '#4caf50', // verde
               '&:hover': {
-                borderColor: '#fff',        // rămâne albă la hover
-                backgroundColor: 'rgba(255,255,255,0.1)', // ușoară umbră albă
-              },
-              '&:focus': {
-                borderColor: '#fff',
-                backgroundColor: 'rgba(255,255,255,0.15)',
+                backgroundColor: '#388e3c', // verde mai închis
               },
             }}
           >
-            Adaugă categorie
+            Cerere de ofertă
           </ActionButton>
-        </ButtonContainer>
-
-
         </Box>
 
         {/*  LISTA cu scroll  */}
@@ -615,6 +646,19 @@ export default function Agency() {
         agencyId={agencyId}
         type={type}
         onSupplierClick={handleSupplierClick}
+      />
+
+      {/* ───────────────── LOGIN DIALOG ───────────────── */}
+      <LoginDialog
+        open={openLoginDialog}
+        onClose={() => setOpenLoginDialog(false)}
+      />
+
+      {/* ───────────────── OFFER REQUEST DIALOG ───────────────── */}
+      <OfferRequestDialog
+        open={openOfferRequest}
+        onClose={() => setOpenOfferRequest(false)}
+        type={type}
       />
     </div>
   );

@@ -7,7 +7,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import InventoryIcon from '@mui/icons-material/Inventory';
-import { useSearchSuppliersByOffering } from '../../api/queries';
+import { useSearchOfferings } from '../../api/queries';
 
 const SearchOfferingDialog = ({ 
   open, 
@@ -33,10 +33,10 @@ const SearchOfferingDialog = ({
   }, [searchTerm]);
   
   // Query for suppliers based on offering search
-  const { data: suppliers = [], isLoading, isError } = useSearchSuppliersByOffering(
+  const { data: suppliers = [], isLoading, isError } = useSearchOfferings(
     agencyId, 
-    debouncedSearchTerm,
-    type
+    type,
+    debouncedSearchTerm
   );
   
   const handleSearch = (e) => {
@@ -95,9 +95,9 @@ const SearchOfferingDialog = ({
           InputLabelProps={{
                sx: {
                  /* ── poziția etichetei în starea normală ── */
-                 transform: 'translate(14px, 22px) scale(1)',  // default e 16 px
+                 transform: 'translate(14px, 22px) scale(1)',  // default e 16 px
             
-                 /* ── poziția când eticheta devine “shrink” (focus/text) ── */
+                 /* ── poziția când eticheta devine "shrink" (focus/text) ── */
                  '&.MuiInputLabel-shrink': {
                    transform: 'translate(14px, -2px) scale(0.75)', // valoarea MUI default
                  },
