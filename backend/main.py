@@ -25,7 +25,7 @@ import logging
 import mail
 
 # Import mail module
-from mail import send_email, test_email_connection, OfferRequestIn, EmailResponse, UserData, generate_html_email
+from mail import send_email, test_email_connection, OfferRequestIn, EmailResponse, UserData, generate_html_email, send_multiple_emails
 
 # --------------------------------------------------------------------
 # 1) Config
@@ -437,87 +437,44 @@ def update_user_config(config_data: UserConfigIn):
 
 # ---------------- Email Endpoints -----------------------------
 @app.post("/send-offer-request", response_model=EmailResponse)
-def send_offer_request(request: OfferRequestIn):
+async def send_offer_request(request: OfferRequestIn):
     """Send an offer request email"""
     try:
-        # Validate that we have at least one recipient
-        if not request.recipient_emails:
-            raise HTTPException(status_code=400, detail="At least one recipient email is required")
-        
-        # Validate email formats
-        invalid_emails = []
-        for email in request.recipient_emails:
-            if not email or '@' not in email or '.' not in email:
-                invalid_emails.append(email)
-        
-        if invalid_emails:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid email format in recipients: {', '.join(invalid_emails)}"
-            )
-        
-        # Validate CC emails if any
-        invalid_cc_emails = []
-        for email in request.cc_emails:
-            if email and ('@' not in email or '.' not in email):
-                invalid_cc_emails.append(email)
-        
-        if invalid_cc_emails:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid email format in CC: {', '.join(invalid_cc_emails)}"
-            )
-        
         result = send_email(request)
-        
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result["message"])
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/send-multiple-offer-requests", response_model=Dict[str, Any])
+async def send_multiple_offer_requests(request: OfferRequestIn):
+    """Send multiple offer request emails, one to each supplier"""
+    try:
+        if not request.suppliers or len(request.suppliers) == 0:
+            raise HTTPException(status_code=400, detail="No suppliers provided for multiple sending")
+        
+        result = send_multiple_emails(request)
+        
+        if not result["success"]:
+            # Still return 200 but with details about failures
+            return result
         
         return result
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"Unexpected error in send_offer_request: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/test-email-connection", response_model=EmailResponse)
-def test_email(user_data: UserData):
-    """Test email connection with the provided credentials"""
-    result = test_email_connection(user_data)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=500, detail=result["message"])
-    
-    return result
-
-@app.post("/preview-offer-request")
-async def preview_offer_request(data: dict):
-    """
-    Generează o previzualizare a emailului pentru cererea de ofertă.
-    """
+@app.post("/preview-offer-request", response_model=Dict[str, Any])
+async def preview_offer_request(request: OfferRequestIn):
+    """Preview an offer request email"""
     try:
-        # Verifică dacă avem toate datele necesare
-        if not data.get("user_data"):
-            return {"success": False, "message": "Lipsesc datele utilizatorului"}
+        # Generate HTML content for preview
+        html_content = request.custom_html if hasattr(request, 'custom_html') and request.custom_html else generate_html_email(request)
         
-        # Generează conținutul HTML al emailului
-        html_content = mail.generate_offer_request_email(
-            data.get("type_mode", "material"),
-            data.get("subcontract", False),
-            data.get("tender_name", ""),
-            data.get("tender_number", ""),
-            data.get("items", []),
-            data.get("documents", []),
-            data.get("transfer_link"),
-            data.get("user_data", {})
-        )
-        
-        # Returnează conținutul HTML și subiectul
         return {
             "success": True,
-            "html_content": html_content,
-            "subject": data.get("subject", "Cerere de ofertă")
+            "subject": request.subject,
+            "html_content": html_content
         }
     except Exception as e:
-        print(f"Eroare la generarea previzualizării: {str(e)}")
-        return {"success": False, "message": f"Eroare la generarea previzualizării: {str(e)}"}
+        raise HTTPException(status_code=500, detail=str(e))

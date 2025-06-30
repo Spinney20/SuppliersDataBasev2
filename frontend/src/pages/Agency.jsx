@@ -16,6 +16,7 @@ import ConstructionIcon from '@mui/icons-material/Construction';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AddIcon from '@mui/icons-material/Add';
 import EmailIcon from '@mui/icons-material/Email';
+import SendIcon from '@mui/icons-material/Send';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../api/axios';
 import { useCategories } from '../api/queries';
@@ -32,6 +33,7 @@ import SupplierDetailsDialog from './agency_components/SupplierDetailsDialog';
 import SearchOfferingDialog from './agency_components/SearchOfferingDialog';
 import LoginDialog from '../components/LoginDialog';
 import OfferRequestDialog from '../components/OfferRequestDialog';
+import MultiSendDialog from '../components/MultiSendDialog';
 import SearchIcon from '@mui/icons-material/Search';
 
 /* ────────────────────────────────────────────────────────── */
@@ -556,21 +558,23 @@ export default function Agency() {
         </ButtonContainer>
 
           {/* Buton pentru cerere de ofertă */}
-          <ActionButton
-            variant="contained"
-            color="secondary"
-            startIcon={<EmailIcon />}
-            onClick={handleOfferRequestClick}
-            sx={{
-              mt: 1,
-              backgroundColor: '#4caf50', // verde
-              '&:hover': {
-                backgroundColor: '#388e3c', // verde mai închis
-              },
-            }}
-          >
-            Cerere de ofertă
-          </ActionButton>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <ActionButton
+              variant="contained"
+              color="secondary"
+              startIcon={<EmailIcon />}
+              onClick={handleOfferRequestClick}
+              sx={{
+                flex: 1,
+                backgroundColor: '#4caf50', // verde
+                '&:hover': {
+                  backgroundColor: '#388e3c', // verde mai închis
+                },
+              }}
+            >
+              Cerere de ofertă
+            </ActionButton>
+          </Box>
         </Box>
 
         {/*  LISTA cu scroll  */}

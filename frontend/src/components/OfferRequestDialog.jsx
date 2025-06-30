@@ -24,19 +24,26 @@ import {
   Chip,
   Paper,
   Autocomplete,
-  Tooltip
+  Tooltip,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EmailIcon from '@mui/icons-material/Email';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import LinkIcon from '@mui/icons-material/Link';
+import SendIcon from '@mui/icons-material/Send';
+import PeopleIcon from '@mui/icons-material/People';
+import PersonIcon from '@mui/icons-material/Person';
+import GroupIcon from '@mui/icons-material/Group';
 import { useUser } from '../context/UserContext';
 import { api } from '../api/axios';
 import { useCategories, useSuppliers } from '../api/queries';
 import { motion } from 'framer-motion';
 import { StyledDialogContent, textInputSX } from '../pages/agency_components/styles';
 import EmailPreviewDialog from './EmailPreviewDialog';
+import MultiSendDialog from './MultiSendDialog';
 
 const initialItem = { name: '', quantity: '', unit: '' };
 
@@ -59,7 +66,7 @@ const dialogPaperProps = {
   },
 };
 
-export default function OfferRequestDialog({ open, onClose, type }) {
+export default function OfferRequestDialog({ open, onClose, type, multiSendMode = false, supplierContacts = [], initialMultiSend = false }) {
   const { user, isLoggedIn } = useUser();
   
   // Form fields
@@ -81,6 +88,9 @@ export default function OfferRequestDialog({ open, onClose, type }) {
   const [selectedAgencyId, setSelectedAgencyId] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSuppliers, setSelectedSuppliers] = useState([]);
+  
+  // Store selected supplier contacts for multi-send
+  const [selectedSupplierContacts, setSelectedSupplierContacts] = useState(supplierContacts || []);
 
   // Get categories based on type
   const { data: categories = [] } = useCategories(selectedAgencyId, type);
@@ -94,6 +104,19 @@ export default function OfferRequestDialog({ open, onClose, type }) {
   // Add state for preview dialog
   const [openPreview, setOpenPreview] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  
+  // Status pentru trimiterea multiplă
+  const [multiSendStatus, setMultiSendStatus] = useState({
+    inProgress: false,
+    total: 0,
+    sent: 0,
+    failed: 0,
+    details: []
+  });
+
+  // New state for multi-send toggle
+  const [showMultiSendDialog, setShowMultiSendDialog] = useState(false);
+  const [useMultiSend, setUseMultiSend] = useState(multiSendMode);
 
   // Funcție pentru salvarea datelor în localStorage
   const saveFormData = () => {
@@ -145,8 +168,37 @@ export default function OfferRequestDialog({ open, onClose, type }) {
 
       // Încarcă datele salvate
       loadFormData();
+      
+      // Handle multi-send mode initialization
+      if (multiSendMode && supplierContacts.length > 0) {
+        // Prepare all data for batch update
+        const allRecipients = [];
+        const allCcRecipients = [];
+        
+        supplierContacts.forEach(contact => {
+          if (contact.emails && contact.emails.length > 0) {
+            allRecipients.push(...contact.emails);
+          }
+          if (contact.cc_emails && contact.cc_emails.length > 0) {
+            allCcRecipients.push(...contact.cc_emails);
+          }
+        });
+        
+        // Batch state updates
+        setUseMultiSend(true);
+        setSelectedSupplierContacts([...supplierContacts]);
+        setRecipients([...new Set(allRecipients)]);
+        setCcRecipients([...new Set(allCcRecipients)]);
+        
+        console.log('Mod de trimitere multiplă activat cu', supplierContacts.length, 'furnizori');
+      }
+      
+      // If initialMultiSend is true, open the MultiSendDialog automatically
+      if (initialMultiSend) {
+        setShowMultiSendDialog(true);
+      }
     }
-  }, [open, type]);
+  }, [open, type, multiSendMode, initialMultiSend]);
 
   // Salvează datele când se modifică
   useEffect(() => {
@@ -171,6 +223,8 @@ export default function OfferRequestDialog({ open, onClose, type }) {
     setError(null);
     setSelectedCategory(null);
     setSelectedSuppliers([]);
+    setUseMultiSend(false);
+    setSelectedSupplierContacts([]);
     setIsSending(false);
     setOpenPreview(false);
     setPreviewData(null);
@@ -364,79 +418,74 @@ export default function OfferRequestDialog({ open, onClose, type }) {
     return emailRegex.test(email);
   };
 
-  // Prepare data for the offer request
+  // Prepare data for sending
   const prepareOfferRequestData = () => {
-    // Validate required fields
-    if (!tenderName.trim()) {
-      setError('Numele licitației este obligatoriu');
-      return null;
-    }
-    
-    if (!tenderNumber.trim()) {
-      setError('Numărul anunțului este obligatoriu');
-      return null;
-    }
-    
-    if (recipients.length === 0) {
-      setError('Adăugați cel puțin un destinatar');
-      return null;
-    }
-    
-    // Validate all recipient emails
-    const invalidRecipients = recipients.filter(email => !isValidEmail(email));
-    if (invalidRecipients.length > 0) {
-      setError(`Următoarele adrese de email sunt invalide: ${invalidRecipients.join(', ')}`);
-      return null;
-    }
-    
-    // Validate all CC emails
-    const invalidCcRecipients = ccRecipients.filter(email => !isValidEmail(email));
-    if (invalidCcRecipients.length > 0) {
-      setError(`Următoarele adrese CC sunt invalide: ${invalidCcRecipients.join(', ')}`);
-      return null;
-    }
-    
-    // Validate items
-    const validItems = items.filter(item => item.name.trim());
-    if (validItems.length === 0) {
-      setError('Adăugați cel puțin un articol');
-      return null;
-    }
-    
-    // Check if user is authenticated and has the necessary data
-    if (!isLoggedIn || !user || !user.email || !user.smtp_pass) {
-      setError('Trebuie să fiți autentificat cu datele de email complete pentru a trimite cereri de ofertă.');
-      return null;
-    }
-    
-    // Prepare data for the offer request
-    return {
-      type_mode: type,
-      subcontract: isSubcontract,
-      subject: subject,
-      tender_name: tenderName,
-      tender_number: tenderNumber,
-      items: validItems.map(item => ({
-        name: item.name,
-        quantity: item.quantity || null,
-        unit: item.unit || null
-      })),
-      documents: selectedFiles.map(file => file.name),
-      transfer_link: transferLink || null,
-      recipient_emails: recipients,
-      cc_emails: ccRecipients,
-      user_data: {
-        nume: user.nume,
-        post: user.post || '',
-        email: user.email,
-        smtp_pass: user.smtp_pass,
-        smtp_server: user.smtp_server || 'smtp.office365.com',
-        smtp_port: user.smtp_port || '587',
-        smtp_user: user.smtp_user || user.email,
-        telefon_mobil: user.telefon_mobil || '',
-        telefon_fix: user.telefon_fix || ''
+    try {
+      // Validare câmpuri obligatorii
+      if (!subject) {
+        setError('Completați subiectul emailului');
+        return null;
       }
-    };
+      
+      if (!tenderName) {
+        setError('Completați numele licitației');
+        return null;
+      }
+      
+      // În modul de trimitere multiplă, nu validăm destinatarii aici
+      if (!useMultiSend) {
+        if (recipients.length === 0) {
+          setError('Adăugați cel puțin un destinatar');
+          return null;
+        }
+      } else if (selectedSupplierContacts.length === 0) {
+        setError('Selectați cel puțin un furnizor pentru trimiterea multiplă');
+        return null;
+      }
+      
+      // Validare articole
+      const validItems = items.filter(item => item.name.trim() !== '');
+      if (validItems.length === 0) {
+        setError('Adăugați cel puțin un articol');
+        return null;
+      }
+      
+      // Construiește datele pentru cererea de ofertă
+      const requestData = {
+        subject,
+        tender_name: tenderName,
+        tender_number: tenderNumber,
+        recipient_emails: recipients,
+        cc_emails: ccRecipients,
+        items: validItems,
+        documents: selectedFiles.map(file => file.path),
+        transfer_link: transferLink,
+        subcontract: isSubcontract,
+        type_mode: type,
+        user_data: {
+          nume: user.nume,
+          post: user.post,
+          email: user.email,
+          smtp_pass: user.smtp_pass,
+          smtp_server: user.smtp_server || "smtp.office365.com",
+          smtp_port: user.smtp_port || "587",
+          smtp_user: user.smtp_user || user.email,
+          telefon_mobil: user.telefon_mobil || user.mobil,
+          telefon_fix: user.telefon_fix
+        }
+      };
+      
+      // Adaugă lista de furnizori pentru trimiterea multiplă
+      if (useMultiSend && selectedSupplierContacts.length > 0) {
+        requestData.suppliers = [...selectedSupplierContacts];
+      }
+      
+      return requestData;
+    } catch (error) {
+      console.error('Error preparing offer request data:', error);
+      setError(`Eroare: ${error.message}`);
+      return null;
+    }
   };
 
   // Handle preview button click
@@ -446,6 +495,7 @@ export default function OfferRequestDialog({ open, onClose, type }) {
     if (data) {
       setPreviewData(data);
       setOpenPreview(true);
+      console.log("Deschid previzualizarea cu datele:", data); // Pentru debugging
     }
   };
 
@@ -479,13 +529,39 @@ export default function OfferRequestDialog({ open, onClose, type }) {
       
       console.log('Sending offer request data:', JSON.stringify(data, null, 2));
       
+      // Determină endpoint-ul în funcție de modul de trimitere
+      const endpoint = useMultiSend ? '/send-multiple-offer-requests' : '/send-offer-request';
+      
       // Send request to backend
-      const response = await api.post('/send-offer-request', data);
+      const response = await api.post(endpoint, data);
       
       if (response.data && response.data.success) {
-        // Close dialog and show success message
+        // În cazul trimiterii multiple, afișăm un status mai detaliat
+        if (useMultiSend) {
+          setMultiSendStatus({
+            inProgress: false,
+            total: selectedSupplierContacts.length,
+            sent: response.data.details.filter(d => d.success).length,
+            failed: response.data.details.filter(d => !d.success).length,
+            details: response.data.details
+          });
+          
+          // Afișăm un mesaj cu rezultatul
+          const successCount = response.data.details.filter(d => d.success).length;
+          const failCount = response.data.details.filter(d => !d.success).length;
+          
+          if (failCount === 0) {
+            alert(`Toate cele ${successCount} cereri de ofertă au fost trimise cu succes!`);
+          } else {
+            alert(`Au fost trimise ${successCount} cereri de ofertă cu succes și ${failCount} au eșuat.`);
+          }
+        } else {
+          // Mesaj standard pentru trimitere simplă
+          alert('Cererea de ofertă a fost trimisă cu succes!');
+        }
+        
+        // Close dialog
         onClose();
-        alert('Cererea de ofertă a fost trimisă cu succes!');
       } else {
         setError('A apărut o eroare la trimiterea cererii de ofertă.');
       }
@@ -505,11 +581,54 @@ export default function OfferRequestDialog({ open, onClose, type }) {
     }
   };
 
+  // Handle multi-send toggle
+  const handleMultiSendToggle = () => {
+    if (!useMultiSend) {
+      setShowMultiSendDialog(true);
+    } else {
+      setUseMultiSend(false);
+      // Reset any multi-send related state
+      setRecipients([]);
+      setSelectedSuppliers([]);
+      setSelectedSupplierContacts([]);
+    }
+  };
+
+  // Handle closing the multi-send dialog
+  const handleMultiSendDialogClose = () => {
+    setShowMultiSendDialog(false);
+  };
+
+  // Handle supplier selection from multi-send dialog
+  const handleMultiSendSupplierSelection = (selectedContacts) => {
+    if (selectedContacts && selectedContacts.length > 0) {
+      // Batch all state updates together to prevent multiple re-renders
+      const allRecipients = [];
+      const allCcRecipients = [];
+      
+      selectedContacts.forEach(contact => {
+        if (contact.emails && contact.emails.length > 0) {
+          allRecipients.push(...contact.emails);
+        }
+        if (contact.cc_emails && contact.cc_emails.length > 0) {
+          allCcRecipients.push(...contact.cc_emails);
+        }
+      });
+      
+      // Use a single batch update
+      setUseMultiSend(true);
+      setSelectedSupplierContacts([...selectedContacts]);
+      setRecipients([...new Set(allRecipients)]);
+      setCcRecipients([...new Set(allCcRecipients)]);
+    }
+    setShowMultiSendDialog(false);
+  };
+
   return (
     <>
       <Dialog
         open={open}
-        onClose={!isSending ? onClose : undefined}
+        onClose={onClose}
         fullWidth
         maxWidth="md"
         PaperComponent={motion.div}
@@ -526,34 +645,252 @@ export default function OfferRequestDialog({ open, onClose, type }) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <EmailIcon />
             <Typography variant="h5" component="div" fontWeight="bold">
-              Cerere de ofertă {type === 'material' ? 'materiale' : 'servicii'}
+              Cerere de ofertă - {type === 'material' ? 'Materiale' : 'Servicii'}
             </Typography>
           </Box>
-
-          {/* Buton de resetare */}
-          <Button
-            variant="outlined"
-            size="small"
-            color="error"
-            onClick={resetFormFields}
-            sx={{
-              textTransform: 'none',
-              borderColor: 'rgba(255,100,100,0.5)',
-              color: 'rgba(255,100,100,0.9)',
-              '&:hover': {
-                borderColor: 'rgba(255,100,100,0.9)',
-                backgroundColor: 'rgba(255, 0, 0, 0.08)',
-              }
-            }}
-          >
-            Resetează formularul
-          </Button>
+          <IconButton onClick={onClose} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+            <DeleteIcon />
+          </IconButton>
         </DialogTitle>
-        
+
         <StyledDialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-            {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          
+          {/* Send Mode Toggle Switch */}
+          <Box sx={{ 
+            mb: 3, 
+            pb: 2, 
+            display: 'flex', 
+            justifyContent: 'center',
+            borderBottom: '1px solid rgba(255,255,255,0.1)'
+          }}>
+            <ToggleButtonGroup
+              value={useMultiSend ? "multiple" : "single"}
+              exclusive
+              onChange={(e, newValue) => {
+                if (newValue === null) return; // Prevent deselection
+                
+                if (newValue === "multiple" && !useMultiSend) {
+                  // Only open dialog if not already in multi-send mode
+                  handleMultiSendToggle();
+                } else if (newValue === "single" && useMultiSend) {
+                  // Reset multi-send related state
+                  setUseMultiSend(false);
+                  setSelectedSupplierContacts([]);
+                  setRecipients([]);
+                  setCcRecipients([]);
+                }
+              }}
+              aria-label="mod trimitere"
+              sx={{ 
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                borderRadius: '24px',
+                padding: '4px',
+                '& .MuiToggleButtonGroup-grouped': {
+                  border: 0,
+                  borderRadius: '20px !important',
+                  mx: 0.5,
+                  px: 2,
+                  py: 0.75,
+                  fontSize: '0.9rem',
+                  fontWeight: 500,
+                  textTransform: 'none',
+                  '&.Mui-selected': {
+                    backgroundColor: useMultiSend ? 'info.main' : 'success.main',
+                    color: '#fff',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    '&:hover': {
+                      backgroundColor: useMultiSend ? 'info.dark' : 'success.dark',
+                    }
+                  },
+                  '&:not(.Mui-selected)': {
+                    color: 'rgba(255,255,255,0.7)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255,255,255,0.1)',
+                      color: '#fff'
+                    }
+                  }
+                }
+              }}
+            >
+              <ToggleButton value="single" aria-label="trimitere singulară">
+                <PersonIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
+                Trimitere singulară
+              </ToggleButton>
+              <ToggleButton value="multiple" aria-label="trimitere multiplă">
+                <GroupIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
+                Trimitere multiplă
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          
+          {/* Categoria și furnizorul */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1, color: '#fff' }}>
+              {useMultiSend ? 'Furnizori selectați pentru trimitere multiplă' : 'Selectează categoria și furnizorul'}
+            </Typography>
             
+            {!useMultiSend && (
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <FormControl fullWidth>
+                  <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Categorie</InputLabel>
+                  <Select
+                    value={selectedCategory?.id || ''}
+                    onChange={handleCategoryChange}
+                    label="Categorie"
+                    disabled={categories.length === 0}
+                    sx={{
+                      color: '#fff',
+                      '.MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'rgba(255,255,255,0.3)',
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'rgba(255,255,255,0.5)',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                      '.MuiSvgIcon-root': {
+                        color: 'rgba(255,255,255,0.7)',
+                      },
+                    }}
+                  >
+                    {categories.length === 0 ? (
+                      <MenuItem disabled>
+                        <CircularProgress size={20} />
+                        <Box sx={{ ml: 1 }}>Se încarcă...</Box>
+                      </MenuItem>
+                    ) : (
+                      categories.map(category => (
+                        <MenuItem key={category.id} value={category.id}>
+                          {category.name}
+                        </MenuItem>
+                      ))
+                    )}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth>
+                  <Autocomplete
+                    options={suppliers}
+                    getOptionLabel={(option) => option.name}
+                    value={selectedSuppliers.length > 0 ? selectedSuppliers[0] : null}
+                    onChange={handleSupplierChange}
+                    disabled={!selectedCategory}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Furnizor"
+                        InputLabelProps={{
+                          sx: { color: 'rgba(255,255,255,0.7)' },
+                        }}
+                        sx={{
+                          color: '#fff',
+                          '.MuiOutlinedInput-notchedOutline': {
+                            borderColor: 'rgba(255,255,255,0.3)',
+                          },
+                          '&:hover .MuiOutlinedInput-notchedOutline': {
+                            borderColor: 'rgba(255,255,255,0.5)',
+                          },
+                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                            borderColor: 'primary.main',
+                          },
+                          '.MuiSvgIcon-root': {
+                            color: 'rgba(255,255,255,0.7)',
+                          },
+                          input: { color: '#fff' },
+                        }}
+                      />
+                    )}
+                    sx={{
+                      '.MuiAutocomplete-tag': {
+                        backgroundColor: 'primary.main',
+                        color: '#fff',
+                      },
+                    }}
+                  />
+                </FormControl>
+              </Box>
+            )}
+            
+            {useMultiSend && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(33, 150, 243, 0.1)', borderRadius: 1, border: '1px solid rgba(33, 150, 243, 0.3)' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body1" sx={{ color: '#fff', display: 'flex', alignItems: 'center' }}>
+                    <GroupIcon sx={{ mr: 1, fontSize: '1.2rem', color: '#2196f3' }} />
+                    <strong>Mod trimitere multiplă activ</strong>
+                  </Typography>
+                  
+                  <Button 
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setShowMultiSendDialog(true)}
+                    sx={{ 
+                      color: '#2196f3',
+                      borderColor: '#2196f3',
+                      '&:hover': {
+                        borderColor: '#1976d2',
+                        backgroundColor: 'rgba(33, 150, 243, 0.1)'
+                      }
+                    }}
+                  >
+                    Modifică selecția
+                  </Button>
+                </Box>
+                
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mb: 1 }}>
+                  {selectedSupplierContacts.length} furnizori selectați
+                </Typography>
+                
+                {selectedSupplierContacts.length > 0 && (
+                  <Box sx={{ 
+                    maxHeight: '150px', 
+                    overflow: 'auto',
+                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    borderRadius: 1,
+                    p: 1,
+                    '&::-webkit-scrollbar': {
+                      width: '4px',
+                    },
+                    '&::-webkit-scrollbar-track': {
+                      background: 'rgba(255, 255, 255, 0.05)',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      borderRadius: '2px',
+                    },
+                  }}>
+                    {selectedSupplierContacts.map((supplier, idx) => (
+                      <Box key={idx} sx={{ 
+                        mb: 1, 
+                        pb: 1, 
+                        borderBottom: idx < selectedSupplierContacts.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none'
+                      }}>
+                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold' }}>
+                          {supplier.name}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>
+                          Destinatari: {supplier.emails.join(', ')}
+                        </Typography>
+                        {supplier.cc_emails.length > 0 && (
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block' }}>
+                            CC: {supplier.cc_emails.join(', ')}
+                          </Typography>
+                        )}
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Box>
+
+          {/* Rest of the form */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
             {/* 1. Detalii licitație */}
             <Box>
               <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
@@ -616,159 +953,99 @@ export default function OfferRequestDialog({ open, onClose, type }) {
                 Destinatari
               </Typography>
               
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Autocomplete
-                  multiple
-                  freeSolo
-                  options={[]}
-                  value={recipients}
-                  inputValue={newRecipient}
-                  onInputChange={(event, value) => setNewRecipient(value)}
-                  onChange={(event, newValue) => setRecipients(newValue)}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        label={option}
+              {!useMultiSend && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Autocomplete
+                    multiple
+                    freeSolo
+                    options={[]}
+                    value={recipients}
+                    inputValue={newRecipient}
+                    onInputChange={(event, value) => setNewRecipient(value)}
+                    onChange={(event, newValue) => setRecipients(newValue)}
+                    renderTags={(value, getTagProps) =>
+                      value.map((option, index) => (
+                        <Chip
+                          label={option}
+                          size="small"
+                          {...getTagProps({ index })}
+                          sx={{ 
+                            backgroundColor: 'rgba(25, 118, 210, 0.15)',
+                            color: '#fff',
+                            '& .MuiChip-deleteIcon': {
+                              color: 'rgba(255,255,255,0.7)',
+                              '&:hover': { color: '#fff' }
+                            }
+                          }}
+                        />
+                      ))
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Destinatari"
+                        placeholder="Adaugă email și apasă Enter..."
                         size="small"
-                        {...getTagProps({ index })}
-                        sx={{ 
-                          backgroundColor: 'rgba(25, 118, 210, 0.15)',
-                          color: '#fff',
-                          '& .MuiChip-deleteIcon': {
-                            color: 'rgba(255,255,255,0.7)',
-                            '&:hover': { color: '#fff' }
+                        sx={textInputSX}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newRecipient && isValidEmail(newRecipient)) {
+                            e.preventDefault();
+                            if (!recipients.includes(newRecipient)) {
+                              setRecipients([...recipients, newRecipient]);
+                              setNewRecipient('');
+                            }
                           }
                         }}
                       />
-                    ))
-                  }
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Destinatari"
-                      placeholder="Adaugă email și apasă Enter..."
-                      size="small"
-                      sx={textInputSX}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && newRecipient && isValidEmail(newRecipient)) {
-                          e.preventDefault();
-                          if (!recipients.includes(newRecipient)) {
-                            setRecipients([...recipients, newRecipient]);
-                            setNewRecipient('');
-                          }
-                        }
-                      }}
-                    />
-                  )}
-                />
-                
-                <Autocomplete
-                  multiple
-                  freeSolo
-                  options={[]}
-                  value={ccRecipients}
-                  inputValue={newCcRecipient}
-                  onInputChange={(event, value) => setNewCcRecipient(value)}
-                  onChange={(event, newValue) => setCcRecipients(newValue)}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        label={option}
+                    )}
+                  />
+                  
+                  <Autocomplete
+                    multiple
+                    freeSolo
+                    options={[]}
+                    value={ccRecipients}
+                    inputValue={newCcRecipient}
+                    onInputChange={(event, value) => setNewCcRecipient(value)}
+                    onChange={(event, newValue) => setCcRecipients(newValue)}
+                    renderTags={(value, getTagProps) =>
+                      value.map((option, index) => (
+                        <Chip
+                          label={option}
+                          size="small"
+                          {...getTagProps({ index })}
+                          sx={{ 
+                            backgroundColor: 'rgba(255,255,255,0.1)',
+                            color: '#fff',
+                            '& .MuiChip-deleteIcon': {
+                              color: 'rgba(255,255,255,0.7)',
+                              '&:hover': { color: '#fff' }
+                            }
+                          }}
+                        />
+                      ))
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="CC"
+                        placeholder="Adaugă email și apasă Enter..."
                         size="small"
-                        {...getTagProps({ index })}
-                        sx={{ 
-                          backgroundColor: 'rgba(255,255,255,0.1)',
-                          color: '#fff',
-                          '& .MuiChip-deleteIcon': {
-                            color: 'rgba(255,255,255,0.7)',
-                            '&:hover': { color: '#fff' }
+                        sx={textInputSX}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newCcRecipient && isValidEmail(newCcRecipient)) {
+                            e.preventDefault();
+                            if (!ccRecipients.includes(newCcRecipient)) {
+                              setCcRecipients([...ccRecipients, newCcRecipient]);
+                              setNewCcRecipient('');
+                            }
                           }
                         }}
                       />
-                    ))
-                  }
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="CC"
-                      placeholder="Adaugă email și apasă Enter..."
-                      size="small"
-                      sx={textInputSX}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && newCcRecipient && isValidEmail(newCcRecipient)) {
-                          e.preventDefault();
-                          if (!ccRecipients.includes(newCcRecipient)) {
-                            setCcRecipients([...ccRecipients, newCcRecipient]);
-                            setNewCcRecipient('');
-                          }
-                        }
-                      }}
-                    />
-                  )}
-                />
-              </Box>
-            </Box>
-            
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-            
-            {/* 3. Selectare furnizori */}
-            <Box>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
-                Selectare furnizori
-              </Typography>
-              
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <FormControl sx={{ flex: 1, ...textInputSX }}>
-                  <InputLabel>Categorie</InputLabel>
-                  <Select
-                    value={selectedCategory?.id || ''}
-                    onChange={handleCategoryChange}
-                    label="Categorie"
-                    size="small"
-                  >
-                    {categories.map(category => (
-                      <MenuItem key={category.id} value={category.id}>
-                        {category.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                
-                <Autocomplete
-                  multiple
-                  options={suppliers}
-                  getOptionLabel={(option) => option.name}
-                  value={selectedSuppliers}
-                  onChange={handleSupplierChange}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Furnizori"
-                      size="small"
-                      sx={textInputSX}
-                    />
-                  )}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        label={option.name}
-                        {...getTagProps({ index })}
-                        size="small"
-                        sx={{ 
-                          backgroundColor: 'rgba(25, 118, 210, 0.15)',
-                          color: '#fff',
-                          '& .MuiChip-deleteIcon': {
-                            color: 'rgba(255,255,255,0.7)',
-                            '&:hover': { color: '#fff' }
-                          }
-                        }}
-                      />
-                    ))
-                  }
-                  sx={{ flex: 2 }}
-                  disabled={!selectedCategory}
-                />
-              </Box>
+                    )}
+                  />
+                </Box>
+              )}
             </Box>
             
             <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
@@ -915,7 +1192,7 @@ export default function OfferRequestDialog({ open, onClose, type }) {
             </Box>
           </Box>
         </StyledDialogContent>
-        
+
         <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <Button 
             onClick={onClose}
@@ -953,21 +1230,23 @@ export default function OfferRequestDialog({ open, onClose, type }) {
           </Button>
         </DialogActions>
       </Dialog>
-      
-      {/* Email Preview Dialog */}
+
+      {/* Preview Dialog */}
       <EmailPreviewDialog
         open={openPreview}
         onClose={() => setOpenPreview(false)}
         emailData={previewData}
         onSend={handleSendAfterPreview}
         onEdit={handleEditFromPreview}
-        onBackToEdit={(data) => {
-          // Update subject if it was changed
-          if (data.subject !== subject) {
-            setSubject(data.subject);
-          }
-          setOpenPreview(false);
-        }}
+      />
+      
+      {/* MultiSend Dialog */}
+      <MultiSendDialog
+        open={showMultiSendDialog}
+        onClose={handleMultiSendDialogClose}
+        agencyId={selectedAgencyId}
+        type={type}
+        onSupplierSelect={handleMultiSendSupplierSelection}
       />
     </>
   );
