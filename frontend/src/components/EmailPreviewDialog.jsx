@@ -54,7 +54,6 @@ const emailEditorStyle = {
   outline: 'none',
   width: '100%',
   height: '100%',
-  resize: 'none',
   overflowY: 'auto',
   borderRadius: '4px'
 };
@@ -70,7 +69,6 @@ export default function EmailPreviewDialog({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [emailContent, setEmailContent] = useState('');
-  const [plainTextContent, setPlainTextContent] = useState('');
   const [subject, setSubject] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   
@@ -81,53 +79,39 @@ export default function EmailPreviewDialog({
       loadPreview();
     } else {
       setEmailContent('');
-      setPlainTextContent('');
       setError(null);
       setLoading(false);
       setIsEditing(false);
     }
   }, [open, emailData]);
 
-  // Convertește HTML în text simplu pentru editare
-  const convertHtmlToPlainText = (html) => {
-    // Eliminăm orice CSS din cod
-    const htmlWithoutStyles = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    
-    // Creează un element temporar pentru a extrage textul
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlWithoutStyles;
-    
-    // Înlocuiește tag-urile <br> și <p> cu newline
-    const brElements = tempDiv.querySelectorAll('br');
-    for (const br of brElements) {
-      br.replaceWith('\n');
+  // Inițializează editorul WYSIWYG când se activează modul de editare
+  useEffect(() => {
+    if (isEditing && editorRef.current) {
+      // Facem conținutul editabil
+      editorRef.current.contentEditable = true;
+      editorRef.current.focus();
+      
+      // Dezactivăm funcționalitățile avansate care ar putea expune HTML
+      document.execCommand('styleWithCSS', false, false);
+      
+      // Salvăm conținutul când se pierde focusul
+      const saveContent = () => {
+        if (editorRef.current) {
+          setEmailContent(editorRef.current.innerHTML);
+        }
+      };
+      
+      editorRef.current.addEventListener('blur', saveContent);
+      
+      return () => {
+        if (editorRef.current) {
+          editorRef.current.removeEventListener('blur', saveContent);
+          editorRef.current.contentEditable = false;
+        }
+      };
     }
-    
-    const pElements = tempDiv.querySelectorAll('p');
-    for (const p of pElements) {
-      p.innerHTML = p.innerHTML + '\n\n';
-    }
-    
-    // Înlocuiește tag-urile <div> cu newline
-    const divElements = tempDiv.querySelectorAll('div');
-    for (const div of divElements) {
-      if (!div.innerHTML.trim().endsWith('\n')) {
-        div.innerHTML = div.innerHTML + '\n';
-      }
-    }
-    
-    // Extrage textul și păstrează formatarea de bază
-    let text = tempDiv.innerText || tempDiv.textContent || '';
-    
-    // Curăță spațiile multiple și liniile goale multiple
-    text = text.replace(/\n{3,}/g, '\n\n');
-    
-    // Elimină orice cod CSS sau HTML rămas
-    text = text.replace(/\{[^}]*\}/g, '');
-    text = text.replace(/<[^>]*>/g, '');
-    
-    return text;
-  };
+  }, [isEditing]);
 
   const loadPreview = async () => {
     try {
@@ -138,7 +122,6 @@ export default function EmailPreviewDialog({
       
       if (response.data && response.data.success) {
         setEmailContent(response.data.html_content);
-        setPlainTextContent(convertHtmlToPlainText(response.data.html_content));
         setSubject(response.data.subject || emailData.subject);
       } else {
         setError(response.data?.message || 'Nu s-a putut genera previzualizarea emailului');
@@ -156,18 +139,6 @@ export default function EmailPreviewDialog({
     if (onEdit) {
       onEdit({ ...emailData, subject: e.target.value });
     }
-  };
-
-  const handleContentChange = (e) => {
-    setPlainTextContent(e.target.value);
-    
-    // Convertim textul simplu în HTML de bază pentru a păstra formatarea
-    const htmlContent = e.target.value
-      .split('\n')
-      .map(line => line.trim() ? `<p>${line}</p>` : '<p>&nbsp;</p>')
-      .join('');
-    
-    setEmailContent(htmlContent);
   };
 
   const handleSend = () => {
@@ -191,6 +162,10 @@ export default function EmailPreviewDialog({
   };
 
   const toggleEditing = () => {
+    if (isEditing && editorRef.current) {
+      // Salvăm conținutul când oprim editarea
+      setEmailContent(editorRef.current.innerHTML);
+    }
     setIsEditing(!isEditing);
   };
 
@@ -293,24 +268,38 @@ export default function EmailPreviewDialog({
                 position: 'relative'
               }}
             >
-              {isEditing ? (
-                <textarea
-                  ref={editorRef}
-                  value={plainTextContent}
-                  onChange={handleContentChange}
-                  style={emailEditorStyle}
-                  placeholder="Scrieți conținutul emailului aici..."
-                />
-              ) : (
+              <Box 
+                ref={editorRef}
+                dangerouslySetInnerHTML={{ __html: emailContent }} 
+                sx={{ 
+                  p: 3,
+                  '& img': { maxWidth: '100%' },
+                  height: '100%',
+                  overflow: 'auto',
+                  outline: isEditing ? '2px solid #1976d2' : 'none',
+                  '&:focus': {
+                    outline: '2px solid #1976d2',
+                  },
+                  ...emailEditorStyle
+                }}
+              />
+              
+              {isEditing && (
                 <Box 
-                  dangerouslySetInnerHTML={{ __html: emailContent }} 
                   sx={{ 
-                    p: 3,
-                    '& img': { maxWidth: '100%' },
-                    height: '100%',
-                    overflow: 'auto'
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                    padding: '5px 10px',
+                    borderRadius: '4px',
+                    color: '#1976d2',
+                    fontWeight: 'bold',
+                    fontSize: '12px'
                   }}
-                />
+                >
+                  Mod editare activat
+                </Box>
               )}
             </Paper>
           )}
