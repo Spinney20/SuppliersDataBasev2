@@ -13,12 +13,25 @@ import {
   TextField,
   IconButton,
   Tooltip,
-  Divider
+  Divider,
+  Menu,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import SendIcon from '@mui/icons-material/Send';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import FormatBoldIcon from '@mui/icons-material/FormatBold';
+import FormatItalicIcon from '@mui/icons-material/FormatItalic';
+import FormatUnderlinedIcon from '@mui/icons-material/FormatUnderlined';
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
+import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
+import FormatColorTextIcon from '@mui/icons-material/FormatColorText';
+import UndoIcon from '@mui/icons-material/Undo';
+import RedoIcon from '@mui/icons-material/Redo';
 import { motion } from 'framer-motion';
 import { api } from '../api/axios';
 
@@ -58,6 +71,26 @@ const emailEditorStyle = {
   borderRadius: '4px'
 };
 
+// Opțiuni pentru dimensiunea textului
+const fontSizeOptions = [
+  { value: '1', label: 'Foarte mic' },
+  { value: '2', label: 'Mic' },
+  { value: '3', label: 'Normal' },
+  { value: '4', label: 'Mare' },
+  { value: '5', label: 'Foarte mare' },
+  { value: '6', label: 'Enorm' },
+  { value: '7', label: 'Maxim' }
+];
+
+// Opțiuni pentru culoarea textului
+const colorOptions = [
+  { value: '#000000', label: 'Negru', color: '#000000' },
+  { value: '#0066cc', label: 'Albastru', color: '#0066cc' },
+  { value: '#008800', label: 'Verde', color: '#008800' },
+  { value: '#cc0000', label: 'Roșu', color: '#cc0000' },
+  { value: '#666666', label: 'Gri', color: '#666666' }
+];
+
 export default function EmailPreviewDialog({ 
   open, 
   onClose, 
@@ -71,6 +104,8 @@ export default function EmailPreviewDialog({
   const [emailContent, setEmailContent] = useState('');
   const [subject, setSubject] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [fontSize, setFontSize] = useState('3');
+  const [colorAnchorEl, setColorAnchorEl] = useState(null);
   
   const editorRef = useRef(null);
 
@@ -169,6 +204,44 @@ export default function EmailPreviewDialog({
     setIsEditing(!isEditing);
   };
 
+  // Funcții pentru formatarea textului
+  const execFormatCommand = (command, value = null) => {
+    if (document.execCommand) {
+      document.execCommand(command, false, value);
+      if (editorRef.current) {
+        editorRef.current.focus();
+        setEmailContent(editorRef.current.innerHTML);
+      }
+    }
+  };
+
+  const handleBold = () => execFormatCommand('bold');
+  const handleItalic = () => execFormatCommand('italic');
+  const handleUnderline = () => execFormatCommand('underline');
+  const handleBulletList = () => execFormatCommand('insertUnorderedList');
+  const handleNumberedList = () => execFormatCommand('insertOrderedList');
+  const handleUndo = () => execFormatCommand('undo');
+  const handleRedo = () => execFormatCommand('redo');
+
+  const handleFontSizeChange = (event) => {
+    const size = event.target.value;
+    setFontSize(size);
+    execFormatCommand('fontSize', size);
+  };
+
+  const handleColorClick = (event) => {
+    setColorAnchorEl(event.currentTarget);
+  };
+
+  const handleColorClose = () => {
+    setColorAnchorEl(null);
+  };
+
+  const handleColorSelect = (color) => {
+    execFormatCommand('foreColor', color);
+    handleColorClose();
+  };
+
   return (
     <Dialog
       open={open}
@@ -264,17 +337,132 @@ export default function EmailPreviewDialog({
                 backgroundColor: '#fff', 
                 borderRadius: 2,
                 flex: 1,
-                overflow: 'auto',
-                position: 'relative'
+                overflow: 'hidden',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column'
               }}
             >
+              {/* Bara de formatare - vizibilă doar în modul de editare */}
+              {isEditing && (
+                <Box sx={{ 
+                  p: 1, 
+                  backgroundColor: '#f5f5f5', 
+                  borderBottom: '1px solid #e0e0e0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 0.5
+                }}>
+                  <Tooltip title="Bold">
+                    <IconButton size="small" onClick={handleBold}>
+                      <FormatBoldIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Tooltip title="Italic">
+                    <IconButton size="small" onClick={handleItalic}>
+                      <FormatItalicIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Tooltip title="Subliniat">
+                    <IconButton size="small" onClick={handleUnderline}>
+                      <FormatUnderlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                  
+                  <Tooltip title="Listă cu puncte">
+                    <IconButton size="small" onClick={handleBulletList}>
+                      <FormatListBulletedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Tooltip title="Listă numerotată">
+                    <IconButton size="small" onClick={handleNumberedList}>
+                      <FormatListNumberedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                  
+                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel id="font-size-label" sx={{ fontSize: '0.8rem' }}>Dimensiune text</InputLabel>
+                    <Select
+                      labelId="font-size-label"
+                      value={fontSize}
+                      onChange={handleFontSizeChange}
+                      label="Dimensiune text"
+                      sx={{ height: 32 }}
+                    >
+                      {fontSizeOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  
+                  <Tooltip title="Culoare text">
+                    <IconButton size="small" onClick={handleColorClick}>
+                      <FormatColorTextIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Menu
+                    anchorEl={colorAnchorEl}
+                    open={Boolean(colorAnchorEl)}
+                    onClose={handleColorClose}
+                  >
+                    {colorOptions.map((option) => (
+                      <MenuItem 
+                        key={option.value} 
+                        onClick={() => handleColorSelect(option.value)}
+                        sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center',
+                          gap: 1
+                        }}
+                      >
+                        <Box 
+                          sx={{ 
+                            width: 16, 
+                            height: 16, 
+                            backgroundColor: option.color,
+                            border: '1px solid #ccc',
+                            borderRadius: '2px'
+                          }} 
+                        />
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Menu>
+                  
+                  <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                  
+                  <Tooltip title="Anulează">
+                    <IconButton size="small" onClick={handleUndo}>
+                      <UndoIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Tooltip title="Refă">
+                    <IconButton size="small" onClick={handleRedo}>
+                      <RedoIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              )}
+              
               <Box 
                 ref={editorRef}
                 dangerouslySetInnerHTML={{ __html: emailContent }} 
                 sx={{ 
                   p: 3,
                   '& img': { maxWidth: '100%' },
-                  height: '100%',
+                  flex: 1,
                   overflow: 'auto',
                   outline: isEditing ? '2px solid #1976d2' : 'none',
                   '&:focus': {
@@ -288,7 +476,7 @@ export default function EmailPreviewDialog({
                 <Box 
                   sx={{ 
                     position: 'absolute',
-                    top: 10,
+                    top: 50,
                     right: 10,
                     backgroundColor: 'rgba(25, 118, 210, 0.1)',
                     padding: '5px 10px',
