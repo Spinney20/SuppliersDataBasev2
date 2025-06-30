@@ -4,6 +4,13 @@ const isDev = require('electron-is-dev');
 const { PythonShell } = require('python-shell');
 const fs = require('fs');
 const { getDbConfig, saveDbConfig, testConnection } = require('./db-config');
+const Store = require('electron-store');
+
+// Create a store for user data
+const store = new Store({
+  name: 'user-data',
+  encryptionKey: 'viarom-suppliers-app-secret-key'
+});
 
 let mainWindow;
 let pythonProcess = null;
@@ -145,6 +152,46 @@ ipcMain.handle('save-db-config', async (event, config) => {
       error: error.message || 'Failed to connect to database' 
     };
   }
+});
+
+// IPC handler for file dialog
+ipcMain.handle('open-file-dialog', async (event, options) => {
+  try {
+    const { filePaths, canceled } = await dialog.showOpenDialog(options);
+    
+    if (canceled || filePaths.length === 0) {
+      return [];
+    }
+    
+    // Return file information for each selected file
+    return filePaths.map(filePath => {
+      const stats = fs.statSync(filePath);
+      return {
+        path: filePath,
+        name: path.basename(filePath),
+        size: stats.size,
+        lastModified: stats.mtime
+      };
+    });
+  } catch (error) {
+    console.error('File dialog error:', error);
+    throw error;
+  }
+});
+
+// IPC handlers for user data
+ipcMain.handle('get-user-data', () => {
+  return store.get('userData');
+});
+
+ipcMain.handle('set-user-data', (event, userData) => {
+  store.set('userData', userData);
+  return true;
+});
+
+ipcMain.handle('clear-user-data', () => {
+  store.delete('userData');
+  return true;
 });
 
 // App lifecycle events

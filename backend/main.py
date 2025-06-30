@@ -434,12 +434,46 @@ def update_user_config(config_data: UserConfigIn):
 @app.post("/send-offer-request", response_model=EmailResponse)
 def send_offer_request(request: OfferRequestIn):
     """Send an offer request email"""
-    result = send_email(request)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=500, detail=result["message"])
-    
-    return result
+    try:
+        # Validate that we have at least one recipient
+        if not request.recipient_emails:
+            raise HTTPException(status_code=400, detail="At least one recipient email is required")
+        
+        # Validate email formats
+        invalid_emails = []
+        for email in request.recipient_emails:
+            if not email or '@' not in email or '.' not in email:
+                invalid_emails.append(email)
+        
+        if invalid_emails:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid email format in recipients: {', '.join(invalid_emails)}"
+            )
+        
+        # Validate CC emails if any
+        invalid_cc_emails = []
+        for email in request.cc_emails:
+            if email and ('@' not in email or '.' not in email):
+                invalid_cc_emails.append(email)
+        
+        if invalid_cc_emails:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid email format in CC: {', '.join(invalid_cc_emails)}"
+            )
+        
+        result = send_email(request)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result["message"])
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in send_offer_request: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.post("/test-email-connection", response_model=EmailResponse)
 def test_email(user_data: UserData):
