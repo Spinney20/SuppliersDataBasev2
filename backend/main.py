@@ -21,9 +21,11 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 import textwrap
+import logging
+import mail
 
 # Import mail module
-from mail import send_email, test_email_connection, OfferRequestIn, EmailResponse, UserData
+from mail import send_email, test_email_connection, OfferRequestIn, EmailResponse, UserData, generate_html_email
 
 # --------------------------------------------------------------------
 # 1) Config
@@ -487,3 +489,35 @@ def test_email(user_data: UserData):
         raise HTTPException(status_code=500, detail=result["message"])
     
     return result
+
+@app.post("/preview-offer-request")
+async def preview_offer_request(data: dict):
+    """
+    Generează o previzualizare a emailului pentru cererea de ofertă.
+    """
+    try:
+        # Verifică dacă avem toate datele necesare
+        if not data.get("user_data"):
+            return {"success": False, "message": "Lipsesc datele utilizatorului"}
+        
+        # Generează conținutul HTML al emailului
+        html_content = mail.generate_offer_request_email(
+            data.get("type_mode", "material"),
+            data.get("subcontract", False),
+            data.get("tender_name", ""),
+            data.get("tender_number", ""),
+            data.get("items", []),
+            data.get("documents", []),
+            data.get("transfer_link"),
+            data.get("user_data", {})
+        )
+        
+        # Returnează conținutul HTML și subiectul
+        return {
+            "success": True,
+            "html_content": html_content,
+            "subject": data.get("subject", "Cerere de ofertă")
+        }
+    except Exception as e:
+        print(f"Eroare la generarea previzualizării: {str(e)}")
+        return {"success": False, "message": f"Eroare la generarea previzualizării: {str(e)}"}

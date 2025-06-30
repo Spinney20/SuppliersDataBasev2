@@ -36,8 +36,12 @@ import { api } from '../api/axios';
 import { useCategories, useSuppliers } from '../api/queries';
 import { motion } from 'framer-motion';
 import { StyledDialogContent, textInputSX } from '../pages/agency_components/styles';
+import EmailPreviewDialog from './EmailPreviewDialog';
 
 const initialItem = { name: '', quantity: '', unit: '' };
+
+// Adaug constante pentru localStorage
+const STORAGE_KEY = 'offerRequestData';
 
 // Dialog paper props for consistent styling
 const dialogPaperProps = {
@@ -87,24 +91,49 @@ export default function OfferRequestDialog({ open, onClose, type }) {
     selectedCategory?.id
   );
 
-  // Reset form when dialog opens
+  // Add state for preview dialog
+  const [openPreview, setOpenPreview] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+
+  // Funcție pentru salvarea datelor în localStorage
+  const saveFormData = () => {
+    const formData = {
+      tenderName,
+      tenderNumber,
+      items,
+      transferLink,
+      isSubcontract
+    };
+    
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(formData));
+    } catch (error) {
+      console.error('Error saving form data to localStorage:', error);
+    }
+  };
+
+  // Funcție pentru încărcarea datelor din localStorage
+  const loadFormData = () => {
+    try {
+      const savedData = localStorage.getItem(STORAGE_KEY);
+      if (savedData) {
+        const parsedData = JSON.parse(savedData);
+        setTenderName(parsedData.tenderName || '');
+        setTenderNumber(parsedData.tenderNumber || '');
+        setItems(parsedData.items && parsedData.items.length > 0 ? parsedData.items : [{ ...initialItem }]);
+        setTransferLink(parsedData.transferLink || '');
+        setIsSubcontract(parsedData.isSubcontract || false);
+      }
+    } catch (error) {
+      console.error('Error loading form data from localStorage:', error);
+    }
+  };
+
+  // Reset form when dialog opens or closes
   useEffect(() => {
     if (open) {
       // Reset all form fields
-      setSubject('');
-      setTenderName('');
-      setTenderNumber('');
-      setRecipients([]);
-      setCcRecipients([]);
-      setNewRecipient('');
-      setNewCcRecipient('');
-      setItems([{ ...initialItem }]);
-      setSelectedFiles([]);
-      setTransferLink('');
-      setIsSubcontract(false);
-      setError(null);
-      setSelectedCategory(null);
-      setSelectedSuppliers([]);
+      resetFormFields();
       
       // Set default subject based on type
       setSubject(`Cerere de ofertă ${type === 'material' ? 'materiale' : 'servicii'} - Viarom Construct`);
@@ -113,8 +142,46 @@ export default function OfferRequestDialog({ open, onClose, type }) {
       const pathParts = window.location.pathname.split('/');
       const agencyIdFromUrl = pathParts[2] ? parseInt(pathParts[2]) : null;
       setSelectedAgencyId(agencyIdFromUrl);
+
+      // Încarcă datele salvate
+      loadFormData();
     }
   }, [open, type]);
+
+  // Salvează datele când se modifică
+  useEffect(() => {
+    if (open) {
+      saveFormData();
+    }
+  }, [tenderName, tenderNumber, items, transferLink, isSubcontract, open]);
+
+  // Function to reset all form fields
+  const resetFormFields = () => {
+    setSubject('');
+    setTenderName('');
+    setTenderNumber('');
+    setRecipients([]);
+    setCcRecipients([]);
+    setNewRecipient('');
+    setNewCcRecipient('');
+    setItems([{ ...initialItem }]);
+    setSelectedFiles([]);
+    setTransferLink('');
+    setIsSubcontract(false);
+    setError(null);
+    setSelectedCategory(null);
+    setSelectedSuppliers([]);
+    setIsSending(false);
+    setOpenPreview(false);
+    setPreviewData(null);
+
+    // Șterge datele din localStorage
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.error('Error removing form data from localStorage:', error);
+    }
+  };
 
   // Handle adding a new item
   const handleAddItem = () => {
@@ -297,89 +364,123 @@ export default function OfferRequestDialog({ open, onClose, type }) {
     return emailRegex.test(email);
   };
 
-  // Handle sending the email
-  const handleSendEmail = async () => {
+  // Prepare data for the offer request
+  const prepareOfferRequestData = () => {
     // Validate required fields
     if (!tenderName.trim()) {
       setError('Numele licitației este obligatoriu');
-      return;
+      return null;
     }
     
     if (!tenderNumber.trim()) {
       setError('Numărul anunțului este obligatoriu');
-      return;
+      return null;
     }
     
     if (recipients.length === 0) {
       setError('Adăugați cel puțin un destinatar');
-      return;
+      return null;
     }
     
     // Validate all recipient emails
     const invalidRecipients = recipients.filter(email => !isValidEmail(email));
     if (invalidRecipients.length > 0) {
       setError(`Următoarele adrese de email sunt invalide: ${invalidRecipients.join(', ')}`);
-      return;
+      return null;
     }
     
     // Validate all CC emails
     const invalidCcRecipients = ccRecipients.filter(email => !isValidEmail(email));
     if (invalidCcRecipients.length > 0) {
       setError(`Următoarele adrese CC sunt invalide: ${invalidCcRecipients.join(', ')}`);
-      return;
+      return null;
     }
     
     // Validate items
     const validItems = items.filter(item => item.name.trim());
     if (validItems.length === 0) {
       setError('Adăugați cel puțin un articol');
-      return;
+      return null;
     }
     
-    setIsSending(true);
-    setError(null);
+    // Check if user is authenticated and has the necessary data
+    if (!isLoggedIn || !user || !user.email || !user.smtp_pass) {
+      setError('Trebuie să fiți autentificat cu datele de email complete pentru a trimite cereri de ofertă.');
+      return null;
+    }
     
-    try {
-      // Check if user is authenticated and has the necessary data
-      if (!isLoggedIn || !user || !user.email || !user.smtp_pass) {
-        setError('Trebuie să fiți autentificat cu datele de email complete pentru a trimite cereri de ofertă.');
-        setIsSending(false);
-        return;
+    // Prepare data for the offer request
+    return {
+      type_mode: type,
+      subcontract: isSubcontract,
+      subject: subject,
+      tender_name: tenderName,
+      tender_number: tenderNumber,
+      items: validItems.map(item => ({
+        name: item.name,
+        quantity: item.quantity || null,
+        unit: item.unit || null
+      })),
+      documents: selectedFiles.map(file => file.name),
+      transfer_link: transferLink || null,
+      recipient_emails: recipients,
+      cc_emails: ccRecipients,
+      user_data: {
+        nume: user.nume,
+        post: user.post || '',
+        email: user.email,
+        smtp_pass: user.smtp_pass,
+        smtp_server: user.smtp_server || 'smtp.office365.com',
+        smtp_port: user.smtp_port || '587',
+        smtp_user: user.smtp_user || user.email,
+        telefon_mobil: user.telefon_mobil || '',
+        telefon_fix: user.telefon_fix || ''
       }
-      
-      // Prepare data for the offer request
-      const offerRequestData = {
-        type_mode: type,
-        subcontract: isSubcontract,
-        subject: subject,
-        tender_name: tenderName,
-        tender_number: tenderNumber,
-        items: validItems.map(item => ({
-          name: item.name,
-          quantity: item.quantity || null,
-          unit: item.unit || null
-        })),
-        documents: selectedFiles.map(file => file.name),
-        transfer_link: transferLink || null,
-        recipient_emails: recipients,
-        cc_emails: ccRecipients,
-        user_data: {
-          nume: user.nume,
-          post: user.post || '',
-          email: user.email,
-          smtp_pass: user.smtp_pass,
-          smtp_server: user.smtp_server || 'smtp.office365.com',
-          smtp_port: user.smtp_port || '587',
-          smtp_user: user.smtp_user || user.email,
-          telefon_mobil: user.telefon_mobil || '',
-          telefon_fix: user.telefon_fix || ''
-        }
+    };
+  };
+
+  // Handle preview button click
+  const handlePreview = () => {
+    setError(null);
+    const data = prepareOfferRequestData();
+    if (data) {
+      setPreviewData(data);
+      setOpenPreview(true);
+    }
+  };
+
+  // Handle sending email after preview
+  const handleSendAfterPreview = (updatedData) => {
+    // Verificăm dacă există conținut HTML personalizat
+    if (updatedData.custom_html) {
+      const dataWithCustomHtml = {
+        ...updatedData,
+        custom_html: updatedData.custom_html
       };
+      sendEmail(dataWithCustomHtml);
+    } else {
+      sendEmail(updatedData);
+    }
+  };
+
+  // Handle editing email data from preview
+  const handleEditFromPreview = (updatedData) => {
+    // Update subject if it was changed
+    if (updatedData.subject !== subject) {
+      setSubject(updatedData.subject);
+    }
+  };
+
+  // Send email function
+  const sendEmail = async (data) => {
+    try {
+      setIsSending(true);
+      setError(null);
       
-      console.log('Sending offer request data:', JSON.stringify(offerRequestData, null, 2));
+      console.log('Sending offer request data:', JSON.stringify(data, null, 2));
       
       // Send request to backend
-      const response = await api.post('/send-offer-request', offerRequestData);
+      const response = await api.post('/send-offer-request', data);
       
       if (response.data && response.data.success) {
         // Close dialog and show success message
@@ -396,431 +497,478 @@ export default function OfferRequestDialog({ open, onClose, type }) {
     }
   };
 
+  // Handle send email button click
+  const handleSendEmail = () => {
+    const data = prepareOfferRequestData();
+    if (data) {
+      handlePreview(); // Show preview instead of sending directly
+    }
+  };
+
   return (
-    <Dialog
-      open={open}
-      onClose={!isSending ? onClose : undefined}
-      fullWidth
-      maxWidth="md"
-      PaperComponent={motion.div}
-      PaperProps={dialogPaperProps}
-    >
-      <DialogTitle sx={{ 
-        color: 'primary.main',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        py: 1.5,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1
-      }}>
-        <EmailIcon />
-        <Typography variant="h5" component="div" fontWeight="bold">
-          Cerere de ofertă {type === 'material' ? 'materiale' : 'servicii'}
-        </Typography>
-      </DialogTitle>
-      
-      <StyledDialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-          {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
-          
-          {/* 1. Detalii licitație */}
-          <Box>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
-              Detalii licitație
+    <>
+      <Dialog
+        open={open}
+        onClose={!isSending ? onClose : undefined}
+        fullWidth
+        maxWidth="md"
+        PaperComponent={motion.div}
+        PaperProps={dialogPaperProps}
+      >
+        <DialogTitle sx={{ 
+          color: 'primary.main',
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          py: 1.5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <EmailIcon />
+            <Typography variant="h5" component="div" fontWeight="bold">
+              Cerere de ofertă {type === 'material' ? 'materiale' : 'servicii'}
             </Typography>
+          </Box>
+
+          {/* Buton de resetare */}
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            onClick={resetFormFields}
+            sx={{
+              textTransform: 'none',
+              borderColor: 'rgba(255,100,100,0.5)',
+              color: 'rgba(255,100,100,0.9)',
+              '&:hover': {
+                borderColor: 'rgba(255,100,100,0.9)',
+                backgroundColor: 'rgba(255, 0, 0, 0.08)',
+              }
+            }}
+          >
+            Resetează formularul
+          </Button>
+        </DialogTitle>
+        
+        <StyledDialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
+            {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
             
-            <TextField
-              label="Subiect email"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              fullWidth
-              size="small"
-              required
-              sx={textInputSX}
-            />
-            
-            <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+            {/* 1. Detalii licitație */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
+                Detalii licitație
+              </Typography>
+              
               <TextField
-                label="Nume licitație"
-                value={tenderName}
-                onChange={(e) => setTenderName(e.target.value)}
+                label="Subiect email"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
                 fullWidth
                 size="small"
                 required
                 sx={textInputSX}
               />
               
-              <TextField
-                label="Număr anunț"
-                value={tenderNumber}
-                onChange={(e) => setTenderNumber(e.target.value)}
-                fullWidth
-                size="small"
-                required
-                sx={textInputSX}
-              />
-            </Box>
-            
-            {type === 'service' && (
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={isSubcontract}
-                    onChange={(e) => setIsSubcontract(e.target.checked)}
-                    color="primary"
-                    size="small"
-                  />
-                }
-                label="Cerere de subcontractare"
-                sx={{ mt: 0.5, color: '#fff', '& .MuiFormControlLabel-label': { fontSize: '0.9rem' } }}
-              />
-            )}
-          </Box>
-          
-          <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-          
-          {/* 2. Destinatari */}
-          <Box>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
-              Destinatari
-            </Typography>
-            
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Autocomplete
-                multiple
-                freeSolo
-                options={[]}
-                value={recipients}
-                inputValue={newRecipient}
-                onInputChange={(event, value) => setNewRecipient(value)}
-                onChange={(event, newValue) => setRecipients(newValue)}
-                renderTags={(value, getTagProps) =>
-                  value.map((option, index) => (
-                    <Chip
-                      label={option}
-                      size="small"
-                      {...getTagProps({ index })}
-                      sx={{ 
-                        backgroundColor: 'rgba(25, 118, 210, 0.15)',
-                        color: '#fff',
-                        '& .MuiChip-deleteIcon': {
-                          color: 'rgba(255,255,255,0.7)',
-                          '&:hover': { color: '#fff' }
-                        }
-                      }}
-                    />
-                  ))
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Destinatari"
-                    placeholder="Adaugă email și apasă Enter..."
-                    size="small"
-                    sx={textInputSX}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newRecipient && isValidEmail(newRecipient)) {
-                        e.preventDefault();
-                        if (!recipients.includes(newRecipient)) {
-                          setRecipients([...recipients, newRecipient]);
-                          setNewRecipient('');
-                        }
-                      }
-                    }}
-                  />
-                )}
-              />
-              
-              <Autocomplete
-                multiple
-                freeSolo
-                options={[]}
-                value={ccRecipients}
-                inputValue={newCcRecipient}
-                onInputChange={(event, value) => setNewCcRecipient(value)}
-                onChange={(event, newValue) => setCcRecipients(newValue)}
-                renderTags={(value, getTagProps) =>
-                  value.map((option, index) => (
-                    <Chip
-                      label={option}
-                      size="small"
-                      {...getTagProps({ index })}
-                      sx={{ 
-                        backgroundColor: 'rgba(255,255,255,0.1)',
-                        color: '#fff',
-                        '& .MuiChip-deleteIcon': {
-                          color: 'rgba(255,255,255,0.7)',
-                          '&:hover': { color: '#fff' }
-                        }
-                      }}
-                    />
-                  ))
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="CC"
-                    placeholder="Adaugă email și apasă Enter..."
-                    size="small"
-                    sx={textInputSX}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newCcRecipient && isValidEmail(newCcRecipient)) {
-                        e.preventDefault();
-                        if (!ccRecipients.includes(newCcRecipient)) {
-                          setCcRecipients([...ccRecipients, newCcRecipient]);
-                          setNewCcRecipient('');
-                        }
-                      }
-                    }}
-                  />
-                )}
-              />
-            </Box>
-          </Box>
-          
-          <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-          
-          {/* 3. Selectare furnizori */}
-          <Box>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
-              Selectare furnizori
-            </Typography>
-            
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <FormControl sx={{ flex: 1, ...textInputSX }}>
-                <InputLabel>Categorie</InputLabel>
-                <Select
-                  value={selectedCategory?.id || ''}
-                  onChange={handleCategoryChange}
-                  label="Categorie"
-                  size="small"
-                >
-                  {categories.map(category => (
-                    <MenuItem key={category.id} value={category.id}>
-                      {category.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              <Autocomplete
-                multiple
-                options={suppliers}
-                getOptionLabel={(option) => option.name}
-                value={selectedSuppliers}
-                onChange={handleSupplierChange}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Furnizori"
-                    size="small"
-                    sx={textInputSX}
-                  />
-                )}
-                renderTags={(value, getTagProps) =>
-                  value.map((option, index) => (
-                    <Chip
-                      label={option.name}
-                      {...getTagProps({ index })}
-                      size="small"
-                      sx={{ 
-                        backgroundColor: 'rgba(25, 118, 210, 0.15)',
-                        color: '#fff',
-                        '& .MuiChip-deleteIcon': {
-                          color: 'rgba(255,255,255,0.7)',
-                          '&:hover': { color: '#fff' }
-                        }
-                      }}
-                    />
-                  ))
-                }
-                sx={{ flex: 2 }}
-                disabled={!selectedCategory}
-              />
-            </Box>
-          </Box>
-          
-          <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-          
-          {/* 4. Articole */}
-          <Box>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
-              Articole
-            </Typography>
-            
-            {items.map((item, index) => (
-              <Box key={index} sx={{ display: 'flex', gap: 1, mb: 0.75, alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
                 <TextField
-                  label="Denumire"
-                  value={item.name}
-                  onChange={(e) => handleItemChange(index, 'name', e.target.value)}
-                  sx={{ flex: 3, ...textInputSX }}
+                  label="Nume licitație"
+                  value={tenderName}
+                  onChange={(e) => setTenderName(e.target.value)}
+                  fullWidth
                   size="small"
                   required
+                  sx={textInputSX}
                 />
                 
                 <TextField
-                  label="Cantitate"
-                  value={item.quantity}
-                  onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                  sx={{ flex: 1, ...textInputSX }}
+                  label="Număr anunț"
+                  value={tenderNumber}
+                  onChange={(e) => setTenderNumber(e.target.value)}
+                  fullWidth
                   size="small"
+                  required
+                  sx={textInputSX}
                 />
-                
-                <TextField
-                  label="UM"
-                  value={item.unit}
-                  onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
-                  sx={{ flex: 1, ...textInputSX }}
-                  size="small"
-                />
-                
-                <IconButton
-                  onClick={() => handleRemoveItem(index)}
-                  disabled={items.length === 1}
-                  size="small"
-                  sx={{ color: 'rgba(255,100,100,0.9)' }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Box>
-            ))}
-            
-            <Button
-              startIcon={<AddIcon />}
-              onClick={handleAddItem}
-              size="small"
-              sx={{ 
-                color: '#fff',
-                borderColor: 'rgba(255,255,255,0.5)',
-                '&:hover': { borderColor: '#fff' }
-              }}
-              variant="outlined"
-            >
-              Adaugă articol
-            </Button>
-          </Box>
-          
-          <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-          
-          {/* 5. Documente și link-uri */}
-          <Box>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
-              Documente și link-uri (opțional)
-            </Typography>
-            
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-              <Box sx={{ flex: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<AttachFileIcon />}
-                    onClick={handleFileSelect}
-                    size="small"
-                    sx={{ 
-                      color: '#fff',
-                      borderColor: 'rgba(255,255,255,0.5)',
-                      '&:hover': { borderColor: '#fff' }
-                    }}
-                  >
-                    Adaugă document
-                  </Button>
-                </Box>
-                
-                {selectedFiles.length > 0 && (
-                  <List dense sx={{ 
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                    borderRadius: 1,
-                    maxHeight: '100px',
-                    overflowY: 'auto',
-                    '&::-webkit-scrollbar': {
-                      width: '4px',
-                    },
-                    '&::-webkit-scrollbar-track': {
-                      background: 'rgba(255, 255, 255, 0.05)',
-                    },
-                    '&::-webkit-scrollbar-thumb': {
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      borderRadius: '2px',
-                    },
-                  }}>
-                    {selectedFiles.map((file, index) => (
-                      <ListItem
-                        key={index}
-                        dense
-                        secondaryAction={
-                          <IconButton edge="end" onClick={() => handleRemoveFile(index)} sx={{ color: 'rgba(255,100,100,0.9)' }}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        }
-                      >
-                        <ListItemText 
-                          primary={file.name} 
-                          secondary={`${(file.size / 1024).toFixed(1)} KB`}
-                          primaryTypographyProps={{ color: '#fff', fontSize: '0.85rem' }}
-                          secondaryTypographyProps={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
               </Box>
               
-              <TextField
-                label="Link transfer fișiere"
-                value={transferLink}
-                onChange={(e) => setTransferLink(e.target.value)}
+              {type === 'service' && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={isSubcontract}
+                      onChange={(e) => setIsSubcontract(e.target.checked)}
+                      color="primary"
+                      size="small"
+                    />
+                  }
+                  label="Cerere de subcontractare"
+                  sx={{ mt: 0.5, color: '#fff', '& .MuiFormControlLabel-label': { fontSize: '0.9rem' } }}
+                />
+              )}
+            </Box>
+            
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
+            
+            {/* 2. Destinatari */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
+                Destinatari
+              </Typography>
+              
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Autocomplete
+                  multiple
+                  freeSolo
+                  options={[]}
+                  value={recipients}
+                  inputValue={newRecipient}
+                  onInputChange={(event, value) => setNewRecipient(value)}
+                  onChange={(event, newValue) => setRecipients(newValue)}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        label={option}
+                        size="small"
+                        {...getTagProps({ index })}
+                        sx={{ 
+                          backgroundColor: 'rgba(25, 118, 210, 0.15)',
+                          color: '#fff',
+                          '& .MuiChip-deleteIcon': {
+                            color: 'rgba(255,255,255,0.7)',
+                            '&:hover': { color: '#fff' }
+                          }
+                        }}
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Destinatari"
+                      placeholder="Adaugă email și apasă Enter..."
+                      size="small"
+                      sx={textInputSX}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newRecipient && isValidEmail(newRecipient)) {
+                          e.preventDefault();
+                          if (!recipients.includes(newRecipient)) {
+                            setRecipients([...recipients, newRecipient]);
+                            setNewRecipient('');
+                          }
+                        }
+                      }}
+                    />
+                  )}
+                />
+                
+                <Autocomplete
+                  multiple
+                  freeSolo
+                  options={[]}
+                  value={ccRecipients}
+                  inputValue={newCcRecipient}
+                  onInputChange={(event, value) => setNewCcRecipient(value)}
+                  onChange={(event, newValue) => setCcRecipients(newValue)}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        label={option}
+                        size="small"
+                        {...getTagProps({ index })}
+                        sx={{ 
+                          backgroundColor: 'rgba(255,255,255,0.1)',
+                          color: '#fff',
+                          '& .MuiChip-deleteIcon': {
+                            color: 'rgba(255,255,255,0.7)',
+                            '&:hover': { color: '#fff' }
+                          }
+                        }}
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="CC"
+                      placeholder="Adaugă email și apasă Enter..."
+                      size="small"
+                      sx={textInputSX}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newCcRecipient && isValidEmail(newCcRecipient)) {
+                          e.preventDefault();
+                          if (!ccRecipients.includes(newCcRecipient)) {
+                            setCcRecipients([...ccRecipients, newCcRecipient]);
+                            setNewCcRecipient('');
+                          }
+                        }
+                      }}
+                    />
+                  )}
+                />
+              </Box>
+            </Box>
+            
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
+            
+            {/* 3. Selectare furnizori */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
+                Selectare furnizori
+              </Typography>
+              
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <FormControl sx={{ flex: 1, ...textInputSX }}>
+                  <InputLabel>Categorie</InputLabel>
+                  <Select
+                    value={selectedCategory?.id || ''}
+                    onChange={handleCategoryChange}
+                    label="Categorie"
+                    size="small"
+                  >
+                    {categories.map(category => (
+                      <MenuItem key={category.id} value={category.id}>
+                        {category.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                
+                <Autocomplete
+                  multiple
+                  options={suppliers}
+                  getOptionLabel={(option) => option.name}
+                  value={selectedSuppliers}
+                  onChange={handleSupplierChange}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Furnizori"
+                      size="small"
+                      sx={textInputSX}
+                    />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        label={option.name}
+                        {...getTagProps({ index })}
+                        size="small"
+                        sx={{ 
+                          backgroundColor: 'rgba(25, 118, 210, 0.15)',
+                          color: '#fff',
+                          '& .MuiChip-deleteIcon': {
+                            color: 'rgba(255,255,255,0.7)',
+                            '&:hover': { color: '#fff' }
+                          }
+                        }}
+                      />
+                    ))
+                  }
+                  sx={{ flex: 2 }}
+                  disabled={!selectedCategory}
+                />
+              </Box>
+            </Box>
+            
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
+            
+            {/* 4. Articole */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
+                Articole
+              </Typography>
+              
+              {items.map((item, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 1, mb: 0.75, alignItems: 'center' }}>
+                  <TextField
+                    label="Denumire"
+                    value={item.name}
+                    onChange={(e) => handleItemChange(index, 'name', e.target.value)}
+                    sx={{ flex: 3, ...textInputSX }}
+                    size="small"
+                    required
+                  />
+                  
+                  <TextField
+                    label="Cantitate"
+                    value={item.quantity}
+                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                    sx={{ flex: 1, ...textInputSX }}
+                    size="small"
+                  />
+                  
+                  <TextField
+                    label="UM"
+                    value={item.unit}
+                    onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
+                    sx={{ flex: 1, ...textInputSX }}
+                    size="small"
+                  />
+                  
+                  <IconButton
+                    onClick={() => handleRemoveItem(index)}
+                    disabled={items.length === 1}
+                    size="small"
+                    sx={{ color: 'rgba(255,100,100,0.9)' }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+              
+              <Button
+                startIcon={<AddIcon />}
+                onClick={handleAddItem}
                 size="small"
-                fullWidth
-                sx={{ flex: 1, ...textInputSX }}
-                placeholder="ex: https://wetransfer.com/..."
-                InputProps={{
-                  startAdornment: (
-                    <LinkIcon sx={{ mr: 1, color: 'rgba(255,255,255,0.7)', fontSize: '1.2rem' }} />
-                  ),
+                sx={{ 
+                  color: '#fff',
+                  borderColor: 'rgba(255,255,255,0.5)',
+                  '&:hover': { borderColor: '#fff' }
                 }}
-              />
+                variant="outlined"
+              >
+                Adaugă articol
+              </Button>
+            </Box>
+            
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
+            
+            {/* 5. Documente și link-uri */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
+                Documente și link-uri (opțional)
+              </Typography>
+              
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                <Box sx={{ flex: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<AttachFileIcon />}
+                      onClick={handleFileSelect}
+                      size="small"
+                      sx={{ 
+                        color: '#fff',
+                        borderColor: 'rgba(255,255,255,0.5)',
+                        '&:hover': { borderColor: '#fff' }
+                      }}
+                    >
+                      Adaugă document
+                    </Button>
+                  </Box>
+                  
+                  {selectedFiles.length > 0 && (
+                    <List dense sx={{ 
+                      backgroundColor: 'rgba(255,255,255,0.05)',
+                      borderRadius: 1,
+                      maxHeight: '100px',
+                      overflowY: 'auto',
+                      '&::-webkit-scrollbar': {
+                        width: '4px',
+                      },
+                      '&::-webkit-scrollbar-track': {
+                        background: 'rgba(255, 255, 255, 0.05)',
+                      },
+                      '&::-webkit-scrollbar-thumb': {
+                        background: 'rgba(255, 255, 255, 0.2)',
+                        borderRadius: '2px',
+                      },
+                    }}>
+                      {selectedFiles.map((file, index) => (
+                        <ListItem
+                          key={index}
+                          dense
+                          secondaryAction={
+                            <IconButton edge="end" onClick={() => handleRemoveFile(index)} sx={{ color: 'rgba(255,100,100,0.9)' }}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          }
+                        >
+                          <ListItemText 
+                            primary={file.name} 
+                            secondary={`${(file.size / 1024).toFixed(1)} KB`}
+                            primaryTypographyProps={{ color: '#fff', fontSize: '0.85rem' }}
+                            secondaryTypographyProps={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </Box>
+                
+                <TextField
+                  label="Link transfer fișiere"
+                  value={transferLink}
+                  onChange={(e) => setTransferLink(e.target.value)}
+                  size="small"
+                  fullWidth
+                  sx={{ flex: 1, ...textInputSX }}
+                  placeholder="ex: https://wetransfer.com/..."
+                  InputProps={{
+                    startAdornment: (
+                      <LinkIcon sx={{ mr: 1, color: 'rgba(255,255,255,0.7)', fontSize: '1.2rem' }} />
+                    ),
+                  }}
+                />
+              </Box>
             </Box>
           </Box>
-        </Box>
-      </StyledDialogContent>
-      
-      <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-        <Button 
-          onClick={onClose}
-          disabled={isSending}
-          variant="outlined"
-          size="small"
-          sx={{
-            color: 'rgba(255,100,100,0.9)',
-            borderColor: 'rgba(255,100,100,0.5)',
-            '&:hover': {
-              borderColor: 'rgba(255,100,100,0.9)',
-              backgroundColor: 'rgba(255, 0, 0, 0.08)',
-            },
-          }}
-        >
-          Anulează
-        </Button>
+        </StyledDialogContent>
         
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleSendEmail}
-          disabled={isSending}
-          size="small"
-          startIcon={isSending ? <CircularProgress size={16} /> : <EmailIcon />}
-          sx={{
-            textTransform: 'none',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            '&:hover': {
-              boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
-            }
-          }}
-        >
-          {isSending ? 'Se trimite...' : 'Trimite cerere'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <Button 
+            onClick={onClose}
+            disabled={isSending}
+            variant="outlined"
+            size="small"
+            sx={{
+              color: 'rgba(255,100,100,0.9)',
+              borderColor: 'rgba(255,100,100,0.5)',
+              '&:hover': {
+                borderColor: 'rgba(255,100,100,0.9)',
+                backgroundColor: 'rgba(255, 0, 0, 0.08)',
+              },
+            }}
+          >
+            Anulează
+          </Button>
+          
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSendEmail}
+            disabled={isSending}
+            size="small"
+            startIcon={isSending ? <CircularProgress size={16} /> : <EmailIcon />}
+            sx={{
+              textTransform: 'none',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              '&:hover': {
+                boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
+              }
+            }}
+          >
+            {isSending ? 'Se trimite...' : 'Previzualizează și trimite'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Email Preview Dialog */}
+      <EmailPreviewDialog
+        open={openPreview}
+        onClose={() => setOpenPreview(false)}
+        emailData={previewData}
+        onSend={handleSendAfterPreview}
+        onEdit={handleEditFromPreview}
+        onBackToEdit={(data) => {
+          // Update subject if it was changed
+          if (data.subject !== subject) {
+            setSubject(data.subject);
+          }
+          setOpenPreview(false);
+        }}
+      />
+    </>
   );
 } 
