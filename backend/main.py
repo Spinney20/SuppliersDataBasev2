@@ -189,6 +189,9 @@ class UserConfigIn(BaseModel):
     post: str
     email: EmailStr
     smtp_pass: str
+    smtp_server: str = "smtp.office365.com"  # Default for Outlook
+    smtp_port: str = "587"
+    smtp_user: Optional[str] = None
     mobil: str
     telefon_fix: Optional[str] = None
 

@@ -368,7 +368,7 @@ export default function OfferRequestDialog({ open, onClose, type }) {
           post: user.post || '',
           email: user.email,
           smtp_pass: user.smtp_pass,
-          smtp_server: user.smtp_server || 'smtp.gmail.com',
+          smtp_server: user.smtp_server || 'smtp.office365.com',
           smtp_port: user.smtp_port || '587',
           smtp_user: user.smtp_user || user.email,
           telefon_mobil: user.telefon_mobil || '',

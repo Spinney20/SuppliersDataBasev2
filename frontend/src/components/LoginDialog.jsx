@@ -137,6 +137,9 @@ const LoginDialog = memo(function LoginDialog({ open, onClose }) {
     // Date de autentificare
     email: '',
     smtp_pass: '',
+    smtp_server: 'smtp.office365.com',  // Default for Outlook
+    smtp_port: '587',                   // Default port
+    smtp_user: '',                      // Will be filled with email by default
     
     // Date personale
     nume: '',
@@ -147,6 +150,7 @@ const LoginDialog = memo(function LoginDialog({ open, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -154,6 +158,9 @@ const LoginDialog = memo(function LoginDialog({ open, onClose }) {
       setFormData({
         email: '',
         smtp_pass: '',
+        smtp_server: 'smtp.office365.com',
+        smtp_port: '587',
+        smtp_user: '',
         nume: '',
         post: '',
         telefon_mobil: '',
@@ -162,6 +169,7 @@ const LoginDialog = memo(function LoginDialog({ open, onClose }) {
       setError('');
       setIsSubmitting(false);
       setActiveTab(0);
+      setShowAdvanced(false);
     }
   }, [open]);
 
@@ -175,10 +183,20 @@ const LoginDialog = memo(function LoginDialog({ open, onClose }) {
   // Folosim useCallback pentru a preveni recrearea funcțiilor la fiecare render
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => {
+      // If email changes, also update smtp_user if it's empty or matches the previous email
+      if (name === 'email' && (!prev.smtp_user || prev.smtp_user === prev.email)) {
+        return {
+          ...prev,
+          [name]: value,
+          smtp_user: value
+        };
+      }
+      return {
+        ...prev,
+        [name]: value
+      };
+    });
   }, []);
 
   const handleTabChange = useCallback((event, newValue) => {
@@ -235,6 +253,10 @@ const LoginDialog = memo(function LoginDialog({ open, onClose }) {
       setIsSubmitting(false);
     }
   }, [formData, login, onClose]);
+
+  const toggleAdvancedSettings = useCallback(() => {
+    setShowAdvanced(prev => !prev);
+  }, []);
 
   return (
     <Dialog 
@@ -326,6 +348,92 @@ const LoginDialog = memo(function LoginDialog({ open, onClose }) {
                   )
                 }}
               />
+              
+              <Button 
+                onClick={toggleAdvancedSettings}
+                sx={{ 
+                  color: '#fff', 
+                  textTransform: 'none',
+                  mt: 1,
+                  fontSize: '0.85rem'
+                }}
+              >
+                {showAdvanced ? "Ascunde setările avansate" : "Arată setările avansate"}
+              </Button>
+              
+              {showAdvanced && (
+                <Box sx={{ mt: 1, p: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 1 }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block', mb: 1 }}>
+                    Setări avansate pentru serverul de email
+                  </Typography>
+                  
+                  <TextField
+                    margin="dense"
+                    label="Server SMTP"
+                    name="smtp_server"
+                    value={formData.smtp_server}
+                    onChange={handleChange}
+                    fullWidth
+                    disabled={isSubmitting}
+                    sx={textInputSX}
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                    helperText={
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                        Pentru Outlook: smtp.office365.com
+                      </Typography>
+                    }
+                    FormHelperTextProps={{
+                      sx: { margin: 0 }
+                    }}
+                  />
+                  
+                  <TextField
+                    margin="dense"
+                    label="Port SMTP"
+                    name="smtp_port"
+                    value={formData.smtp_port}
+                    onChange={handleChange}
+                    fullWidth
+                    disabled={isSubmitting}
+                    sx={textInputSX}
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                    helperText={
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                        De obicei 587 (TLS) sau 465 (SSL)
+                      </Typography>
+                    }
+                    FormHelperTextProps={{
+                      sx: { margin: 0 }
+                    }}
+                  />
+                  
+                  <TextField
+                    margin="dense"
+                    label="Utilizator SMTP"
+                    name="smtp_user"
+                    value={formData.smtp_user}
+                    onChange={handleChange}
+                    fullWidth
+                    disabled={isSubmitting}
+                    sx={textInputSX}
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                    helperText={
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                        De obicei este adresa de email completă
+                      </Typography>
+                    }
+                    FormHelperTextProps={{
+                      sx: { margin: 0 }
+                    }}
+                  />
+                </Box>
+              )}
             </>
           )}
           
