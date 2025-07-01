@@ -60,7 +60,7 @@ const cardVariants = {
 };
 
 // Check if we're running in Electron
-const isElectron = window.electronAPI !== undefined;
+const isElectron = window.api !== undefined;
 
 export default function Home() {
   const { data: agencies = [] } = useAgencies();
@@ -76,19 +76,35 @@ export default function Home() {
     port: 5432,
     database: 'furnizori_dev',
     username: 'user',
-    password: 'pass'
+    password: 'pass',
+    apiUrl: 'http://localhost:8000'
   });
 
   // Load database config from Electron store if available
   useEffect(() => {
     if (isElectron) {
-      window.electronAPI.getDbConfig()
+      window.api.getDbConfig()
         .then(config => {
           setDbConfig(config);
         })
         .catch(err => {
           console.error('Failed to get database config:', err);
         });
+    } else {
+      // În versiunea web, încărcăm configurația din localStorage
+      const savedConfig = localStorage.getItem('dbConfig');
+      if (savedConfig) {
+        try {
+          const parsedConfig = JSON.parse(savedConfig);
+          // Ne asigurăm că avem și câmpul apiUrl
+          if (!parsedConfig.apiUrl) {
+            parsedConfig.apiUrl = 'http://localhost:8000';
+          }
+          setDbConfig(parsedConfig);
+        } catch (error) {
+          console.error('Failed to parse database config from localStorage:', error);
+        }
+      }
     }
   }, []);
 
@@ -108,7 +124,7 @@ export default function Home() {
 
   const handleDbConfigSave = () => {
     if (isElectron) {
-      window.electronAPI.saveDbConfig(dbConfig)
+      window.api.saveDbConfig(dbConfig)
         .then(() => {
           console.log('Database config saved');
           setDbConfigOpen(false);
@@ -119,7 +135,12 @@ export default function Home() {
           console.error('Failed to save database config:', err);
         });
     } else {
+      // În versiunea web, salvăm configurația în localStorage
+      localStorage.setItem('dbConfig', JSON.stringify(dbConfig));
+      console.log('Database config saved to localStorage');
       setDbConfigOpen(false);
+      // Reload the page to apply new config
+      window.location.reload();
     }
   };
 
@@ -146,23 +167,21 @@ export default function Home() {
         alignItems: 'center',
       }}
     >
-      {/* Database config button (only in Electron) */}
-      {isElectron && (
-        <IconButton
-          onClick={handleDbConfigOpen}
-          sx={{
-            position: 'absolute',
-            top: 16,
-            right: 16,
-            zIndex: (theme) => theme.zIndex.appBar + 1,
-            bgcolor: 'rgba(255,255,255,0.15)',
-            '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
-            backdropFilter: 'blur(6px)',
-          }}
-        >
-          <SettingsIcon sx={{ color: '#fff' }} />
-        </IconButton>
-      )}
+      {/* Database config button (pentru toate versiunile) */}
+      <IconButton
+        onClick={handleDbConfigOpen}
+        sx={{
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          zIndex: (theme) => theme.zIndex.appBar + 1,
+          bgcolor: 'rgba(255,255,255,0.15)',
+          '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+          backdropFilter: 'blur(6px)',
+        }}
+      >
+        <SettingsIcon sx={{ color: '#fff' }} />
+      </IconButton>
 
       <AnimatePresence mode="wait">
         <Box
@@ -336,6 +355,16 @@ export default function Home() {
               onChange={(e) => handleDbConfigChange('url', e.target.value)}
               helperText="Format: postgresql://user:pass@host:port/database"
             />
+
+            {!isElectron && (
+              <TextField
+                label="URL API"
+                fullWidth
+                value={dbConfig.apiUrl}
+                onChange={(e) => handleDbConfigChange('apiUrl', e.target.value)}
+                helperText="URL-ul API-ului backend (ex: http://localhost:8000)"
+              />
+            )}
 
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
               <TextField

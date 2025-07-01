@@ -6,15 +6,34 @@ const isDev = require('./is-dev.cjs');
 const dbConfig = require('./db-config.cjs');
 const { store, getUserData, setUserData, clearUserData, getDbConfig, setDbConfig } = require('./store.cjs');
 
+// Setăm numele aplicației
+app.name = 'FurniVIA';
+if (app.setAboutPanelOptions) {
+  app.setAboutPanelOptions({
+    applicationName: 'FurniVIA',
+    applicationVersion: app.getVersion(),
+    copyright: 'Copyright © 2024'
+  });
+}
+
 let mainWindow;
 let pythonProcess = null;
 let isAppQuitting = false; // Flag pentru a urmări starea de închidere a aplicației
 let isBackendStarted = false; // Flag pentru a urmări dacă backend-ul a pornit
 
 function createWindow() {
+  // Calculăm dimensiunile proporționale cu 1920x1000
+  const screenSize = require('electron').screen.getPrimaryDisplay().workAreaSize;
+  const aspectRatio = 1920 / 1000;
+  
+  // Calculăm dimensiunile păstrând proporția 1920x1000
+  // Folosim 80% din înălțimea ecranului ca bază
+  const height = Math.floor(screenSize.height * 0.8);
+  const width = Math.floor(height * aspectRatio);
+  
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: width,
+    height: height,
     webPreferences: {
       nodeIntegration: false, // is default value after Electron v5
       contextIsolation: true, // protect against prototype pollution
@@ -22,19 +41,33 @@ function createWindow() {
       // Optimizări pentru performanță
       backgroundThrottling: false, // Previne throttling când aplicația este în background
     },
-    icon: path.join(__dirname, '../public/vite.svg'),
+    icon: path.join(__dirname, '../public/icons/icon.png'),
+    // Ascundem meniul standard
+    autoHideMenuBar: true,
     // Folosim stilul standard de fereastră Windows
     frame: true,
     titleBarStyle: 'default',
-    titleBarOverlay: false,
+    titleBarOverlay: {
+      color: '#121212',
+      symbolColor: '#ffffff',
+      height: 40
+    },
     // Optimizări pentru pornire
     show: false, // Nu afișăm fereastra până când nu e gata
     backgroundColor: '#121212', // Setăm un fundal pentru a evita flash-ul alb
+    title: 'FurniVIA'
   });
+
+  // Dezactivăm meniul principal
+  mainWindow.setMenu(null);
 
   // Arătăm fereastra când e gata pentru a evita flash-ul alb
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    // Setăm iconul explicit pentru taskbar (Windows)
+    if (process.platform === 'win32') {
+      mainWindow.setIcon(path.join(__dirname, '../public/icons/icon.png'));
+    }
     // Pornim backend-ul Python după ce fereastra este afișată
     // pentru a îmbunătăți experiența utilizatorului
     if (!isBackendStarted) {
@@ -129,7 +162,6 @@ function startPythonBackend() {
       cwd: path.join(process.cwd(), '..', 'backend'),
       env: {
         ...process.env,
-        DATABASE_URL: dbConfig.url,
         ELECTRON_RUN: '1',
         PYTHONUNBUFFERED: '1', // Dezactivăm bufferizarea pentru output mai rapid
         PYTHONDONTWRITEBYTECODE: '1', // Previne crearea fișierelor .pyc

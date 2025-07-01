@@ -2,8 +2,8 @@
  * Configurație pentru electron-builder
  */
 module.exports = {
-  appId: 'com.suppliersdb.app',
-  productName: 'Suppliers Database',
+  appId: 'com.furnivia.app',
+  productName: 'FurniVIA',
   files: [
     'dist/**/*',
     'electron/**/*'
@@ -20,11 +20,21 @@ module.exports = {
   ],
   win: {
     target: 'nsis',
-    icon: 'public/vite.svg'
+    icon: 'public/icons/icon.ico'
+  },
+  mac: {
+    icon: 'public/icons/icon.icns',
+    category: 'public.app-category.business'
+  },
+  linux: {
+    icon: 'public/icons',
+    category: 'Office'
   },
   nsis: {
     oneClick: false,
     allowToChangeInstallationDirectory: true,
-    createDesktopShortcut: true
+    createDesktopShortcut: true,
+    installerIcon: 'public/icons/icon.ico',
+    uninstallerIcon: 'public/icons/icon.ico'
   }
 }; 

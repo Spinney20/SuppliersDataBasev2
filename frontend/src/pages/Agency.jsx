@@ -16,7 +16,6 @@ import ConstructionIcon from '@mui/icons-material/Construction';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AddIcon from '@mui/icons-material/Add';
 import EmailIcon from '@mui/icons-material/Email';
-import SendIcon from '@mui/icons-material/Send';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../api/axios';
 import { useCategories } from '../api/queries';
@@ -440,20 +439,20 @@ export default function Agency() {
               </Box>
             </Button>
             <Button 
-              onClick={() => setType('service')}
+              onClick={() => setType('serviciu')}
               sx={{
-                flex: type === 'service' ? 1.2 : 0.8,
-                backgroundColor: type === 'service' ? 'primary.main' : 'rgba(255,255,255,0.1)',
+                flex: type === 'serviciu' ? 1.2 : 0.8,
+                backgroundColor: type === 'serviciu' ? 'primary.main' : 'rgba(255,255,255,0.1)',
                 color: '#fff',
-                py: type === 'service' ? '0.8rem' : '0.6rem',
+                py: type === 'serviciu' ? '0.8rem' : '0.6rem',
                 position: 'relative',
                 overflow: 'hidden',
-                zIndex: type === 'service' ? 2 : 1,
-                boxShadow: type === 'service' ? '0px 4px 8px rgba(0,0,0,0.25)' : 'none',
-                transform: type === 'service' ? 'scale(1.05)' : 'scale(1)',
+                zIndex: type === 'serviciu' ? 2 : 1,
+                boxShadow: type === 'serviciu' ? '0px 4px 8px rgba(0,0,0,0.25)' : 'none',
+                transform: type === 'serviciu' ? 'scale(1.05)' : 'scale(1)',
                 '&:hover': { 
-                  backgroundColor: type === 'service' ? 'primary.dark' : 'rgba(255,255,255,0.2)',
-                  transform: type === 'service' ? 'scale(1.05)' : 'scale(1.02)',
+                  backgroundColor: type === 'serviciu' ? 'primary.dark' : 'rgba(255,255,255,0.2)',
+                  transform: type === 'serviciu' ? 'scale(1.05)' : 'scale(1.02)',
                 },
                 '&::after': {
                   content: '""',
@@ -463,21 +462,21 @@ export default function Agency() {
                   width: '100%',
                   height: '100%',
                   background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 50%)',
-                  opacity: type === 'service' ? 1 : 0,
+                  opacity: type === 'serviciu' ? 1 : 0,
                   transition: 'opacity 0.3s ease',
                 }
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <EngineeringIcon sx={{ 
-                  fontSize: type === 'service' ? 28 : 20,
+                  fontSize: type === 'serviciu' ? 28 : 20,
                   transition: 'all 0.3s ease-in-out',
                 }} />
                 <Typography 
                   sx={{ 
-                    fontSize: type === 'service' ? 18 : 14,
-                    fontWeight: type === 'service' ? 700 : 400,
-                    letterSpacing: type === 'service' ? 0.5 : 0,
+                    fontSize: type === 'serviciu' ? 18 : 14,
+                    fontWeight: type === 'serviciu' ? 700 : 400,
+                    letterSpacing: type === 'serviciu' ? 0.5 : 0,
                     transition: 'all 0.3s ease-in-out',
                   }}
                 >

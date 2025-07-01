@@ -178,11 +178,12 @@ export default function EmailPreviewDialog({
 
   const handleSend = () => {
     if (onSend) {
-      // Folosește conținutul editat
+      // Folosește conținutul editat și păstrează flag-ul use_table_format
       const updatedData = {
         ...emailData,
         subject,
-        custom_html: emailContent
+        custom_html: emailContent,
+        use_table_format: emailData.use_table_format
       };
       onSend(updatedData);
     }

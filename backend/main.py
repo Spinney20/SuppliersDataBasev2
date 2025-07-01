@@ -5,7 +5,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy import or_
 from sqlalchemy import and_
 
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, File, UploadFile, Form, Request
 from pydantic import BaseModel, EmailStr
 from pydantic_settings import BaseSettings
 from sqlalchemy import Column, Integer, String, ForeignKey, create_engine, UniqueConstraint, Table
@@ -23,9 +23,11 @@ import os
 import textwrap
 import logging
 import mail
+import json
+import tempfile
 
 # Import mail module
-from mail import send_email, test_email_connection, OfferRequestIn, EmailResponse, UserData, generate_html_email, send_multiple_emails
+from mail import send_email, test_email_connection, OfferRequestIn, EmailResponse, UserData, generate_html_email, send_multiple_emails, OfferItem, SupplierContact
 
 # --------------------------------------------------------------------
 # 1) Config
@@ -42,7 +44,7 @@ settings = Settings()
 # --------------------------------------------------------------------
 # 2) SQLAlchemy set‑up
 # --------------------------------------------------------------------
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, pool_size=2, max_overflow=0)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
@@ -66,7 +68,7 @@ supplier_category = Table(                   # table punte
 
 class SupplierType(PyEnum):
     MATERIAL = "material"
-    SERVICE  = "service"
+    SERVICE  = "serviciu"
 
 class Offering(Base):
      __tablename__ = "offerings"
@@ -437,32 +439,265 @@ def update_user_config(config_data: UserConfigIn):
 
 # ---------------- Email Endpoints -----------------------------
 @app.post("/send-offer-request", response_model=EmailResponse)
-async def send_offer_request(request: OfferRequestIn):
-    """Send an offer request email"""
+async def send_offer_request(
+    request: Request,
+):
+    """
+    Send an offer request email.
+    Accepts either JSON data or form data with files.
+    """
     try:
-        result = send_email(request)
-        if not result["success"]:
-            raise HTTPException(status_code=500, detail=result["message"])
-        return result
+        # Check content type to determine how to handle the request
+        content_type = request.headers.get("content-type", "")
+        print(f"Request content type: {content_type}")
+        
+        if "multipart/form-data" in content_type:
+            # Handle multipart form data with files
+            form = await request.form()
+            print(f"Form data keys: {form.keys()}")
+            
+            # Get the JSON data
+            data_str = form.get("data")
+            if not data_str:
+                return {"success": False, "message": "Missing data field in form"}
+            
+            # Parse the JSON data
+            request_data = json.loads(data_str)
+            print(f"Parsed request data: {json.dumps(request_data, indent=2)}")
+            
+            # Create a temporary directory to store uploaded files
+            with tempfile.TemporaryDirectory() as temp_dir:
+                document_paths = []
+                document_names = []
+                
+                # Process each file from the form
+                for key in form.keys():
+                    if key.startswith("file_"):
+                        try:
+                            file = form[key]
+                            print(f"Examining file key: {key}, type: {type(file)}")
+                            
+                            if hasattr(file, 'filename'):
+                                print(f"Processing file: {key}, filename: {file.filename}")
+                                
+                                # Create a temporary file path
+                                temp_file_path = os.path.join(temp_dir, file.filename)
+                                
+                                # Read the file content
+                                contents = await file.read()
+                                print(f"Read {len(contents)} bytes from {file.filename}")
+                                
+                                # Write to temp file
+                                with open(temp_file_path, "wb") as f:
+                                    f.write(contents)
+                                
+                                file_size = os.path.getsize(temp_file_path) if os.path.exists(temp_file_path) else 0
+                                print(f"Saved file to {temp_file_path}, exists: {os.path.exists(temp_file_path)}, size: {file_size}")
+                                
+                                if file_size > 0:
+                                    # Add to our document lists
+                                    document_paths.append(temp_file_path)
+                                    document_names.append(file.filename)
+                                else:
+                                    print(f"Skipping empty file: {file.filename}")
+                            else:
+                                print(f"File object has no filename attribute: {file}")
+                        except Exception as e:
+                            import traceback
+                            print(f"Error processing file {key}: {e}")
+                            print(traceback.format_exc())
+                
+                print(f"Processed {len(document_paths)} files: {document_names}")
+                
+                # Create proper items as dictionaries
+                items = []
+                for item_data in request_data.get("items", []):
+                    items.append({
+                        "name": item_data.get("name", ""),
+                        "quantity": item_data.get("quantity", ""),
+                        "unit": item_data.get("unit", "")
+                    })
+                
+                # Create the OfferRequestIn object
+                offer_request = OfferRequestIn(
+                    type_mode=request_data.get("type_mode"),
+                    subject=request_data.get("subject"),
+                    tender_name=request_data.get("tender_name"),
+                    tender_number=request_data.get("tender_number"),
+                    subcontract=request_data.get("subcontract", False),
+                    items=items,
+                    documents=document_paths,
+                    document_names=document_names,
+                    transfer_link=request_data.get("transfer_link"),
+                    recipient_emails=request_data.get("recipient_emails", []),
+                    cc_emails=request_data.get("cc_emails", []),
+                    user_data=UserData(**request_data.get("user_data", {})),
+                    custom_html=request_data.get("custom_html"),
+                    use_table_format=request_data.get("use_table_format", False)
+                )
+                
+                # Send the email
+                return send_email(offer_request)
+        else:
+            # Handle regular JSON request
+            request_data = await request.json()
+            print(f"Regular JSON request received: {json.dumps(request_data, indent=2)}")
+            
+            # Convert items to dictionaries if they're not already
+            if "items" in request_data and request_data["items"]:
+                items = []
+                for item in request_data["items"]:
+                    if isinstance(item, dict):
+                        items.append(item)
+                    else:
+                        items.append({
+                            "name": getattr(item, "name", ""),
+                            "quantity": getattr(item, "quantity", ""),
+                            "unit": getattr(item, "unit", "")
+                        })
+                request_data["items"] = items
+            
+            offer_request = OfferRequestIn(**request_data)
+            return send_email(offer_request)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        print(f"Error in send_offer_request: {e}")
+        print(traceback.format_exc())
+        return {"success": False, "message": f"Error: {str(e)}"}
 
 @app.post("/send-multiple-offer-requests", response_model=Dict[str, Any])
-async def send_multiple_offer_requests(request: OfferRequestIn):
-    """Send multiple offer request emails, one to each supplier"""
+async def send_multiple_offer_requests(
+    request: Request,
+):
+    """
+    Send multiple offer request emails.
+    Accepts either JSON data or form data with files.
+    """
     try:
-        if not request.suppliers or len(request.suppliers) == 0:
-            raise HTTPException(status_code=400, detail="No suppliers provided for multiple sending")
+        # Check content type to determine how to handle the request
+        content_type = request.headers.get("content-type", "")
+        print(f"Multi-send request content type: {content_type}")
         
-        result = send_multiple_emails(request)
-        
-        if not result["success"]:
-            # Still return 200 but with details about failures
-            return result
-        
-        return result
+        if "multipart/form-data" in content_type:
+            # Handle multipart form data with files
+            form = await request.form()
+            print(f"Multi-send form data keys: {form.keys()}")
+            
+            # Get the JSON data
+            data_str = form.get("data")
+            if not data_str:
+                return {"success": False, "message": "Missing data field in form", "details": []}
+            
+            # Parse the JSON data
+            request_data = json.loads(data_str)
+            print(f"Multi-send parsed request data: {json.dumps(request_data, indent=2)}")
+            
+            # Create a temporary directory to store uploaded files
+            with tempfile.TemporaryDirectory() as temp_dir:
+                document_paths = []
+                document_names = []
+                
+                # Process each file from the form
+                for key in form.keys():
+                    if key.startswith("file_"):
+                        try:
+                            file = form[key]
+                            print(f"Multi-send examining file key: {key}, type: {type(file)}")
+                            
+                            if hasattr(file, 'filename'):
+                                print(f"Multi-send processing file: {key}, filename: {file.filename}")
+                                
+                                # Create a temporary file path
+                                temp_file_path = os.path.join(temp_dir, file.filename)
+                                
+                                # Read the file content
+                                contents = await file.read()
+                                print(f"Multi-send read {len(contents)} bytes from {file.filename}")
+                                
+                                # Write to temp file
+                                with open(temp_file_path, "wb") as f:
+                                    f.write(contents)
+                                
+                                file_size = os.path.getsize(temp_file_path) if os.path.exists(temp_file_path) else 0
+                                print(f"Multi-send saved file to {temp_file_path}, exists: {os.path.exists(temp_file_path)}, size: {file_size}")
+                                
+                                if file_size > 0:
+                                    # Add to our document lists
+                                    document_paths.append(temp_file_path)
+                                    document_names.append(file.filename)
+                                else:
+                                    print(f"Skipping empty file: {file.filename}")
+                            else:
+                                print(f"File object has no filename attribute: {file}")
+                        except Exception as e:
+                            import traceback
+                            print(f"Error processing file {key}: {e}")
+                            print(traceback.format_exc())
+                
+                print(f"Multi-send processed {len(document_paths)} files: {document_names}")
+                
+                # Create proper items as dictionaries
+                items = []
+                for item_data in request_data.get("items", []):
+                    items.append({
+                        "name": item_data.get("name", ""),
+                        "quantity": item_data.get("quantity", ""),
+                        "unit": item_data.get("unit", "")
+                    })
+                
+                # Create supplier contacts
+                suppliers = []
+                if "suppliers" in request_data:
+                    for supplier_data in request_data["suppliers"]:
+                        suppliers.append(SupplierContact(**supplier_data))
+                
+                # Create the OfferRequestIn object
+                offer_request = OfferRequestIn(
+                    type_mode=request_data.get("type_mode"),
+                    subject=request_data.get("subject"),
+                    tender_name=request_data.get("tender_name"),
+                    tender_number=request_data.get("tender_number"),
+                    subcontract=request_data.get("subcontract", False),
+                    items=items,
+                    documents=document_paths,
+                    document_names=document_names,
+                    transfer_link=request_data.get("transfer_link"),
+                    recipient_emails=request_data.get("recipient_emails", []),
+                    cc_emails=request_data.get("cc_emails", []),
+                    user_data=UserData(**request_data.get("user_data", {})),
+                    custom_html=request_data.get("custom_html"),
+                    suppliers=suppliers,
+                    use_table_format=request_data.get("use_table_format", False)
+                )
+                
+                # Send the emails
+                return send_multiple_emails(offer_request)
+        else:
+            # Handle regular JSON request
+            request_data = await request.json()
+            print(f"Multi-send regular JSON request received: {json.dumps(request_data, indent=2)}")
+            
+            # Convert items to dictionaries if they're not already
+            if "items" in request_data and request_data["items"]:
+                items = []
+                for item in request_data["items"]:
+                    if isinstance(item, dict):
+                        items.append(item)
+                    else:
+                        items.append({
+                            "name": getattr(item, "name", ""),
+                            "quantity": getattr(item, "quantity", ""),
+                            "unit": getattr(item, "unit", "")
+                        })
+                request_data["items"] = items
+            
+            offer_request = OfferRequestIn(**request_data)
+            return send_multiple_emails(offer_request)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        print(f"Error in send_multiple_offer_requests: {e}")
+        print(traceback.format_exc())
+        return {"success": False, "message": f"Error: {str(e)}", "details": []}
 
 @app.post("/preview-offer-request", response_model=Dict[str, Any])
 async def preview_offer_request(request: OfferRequestIn):
@@ -474,7 +709,8 @@ async def preview_offer_request(request: OfferRequestIn):
         return {
             "success": True,
             "subject": request.subject,
-            "html_content": html_content
+            "html_content": html_content,
+            "use_table_format": request.use_table_format if hasattr(request, 'use_table_format') else False
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

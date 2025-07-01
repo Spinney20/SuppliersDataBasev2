@@ -72,6 +72,22 @@ function getEnvDatabaseUrl() {
   return 'postgresql://user:password@localhost:5432/furnizori_dev';
 }
 
+// Update .env file with new DATABASE_URL
+function updateEnvFile(dbUrl) {
+  try {
+    const envPath = path.join(process.cwd(), '..', 'backend', '.env');
+    const envContent = `DATABASE_URL=${dbUrl}\n`;
+    
+    // Scrie în fișierul .env
+    fs.writeFileSync(envPath, envContent, 'utf8');
+    console.log('Updated .env file with new DATABASE_URL');
+    return true;
+  } catch (error) {
+    console.error('Error updating .env file:', error);
+    return false;
+  }
+}
+
 // Initialize store for database configuration
 const dbStore = new SimpleStore({
   name: 'db-config'
@@ -180,7 +196,11 @@ function getDbConfig() {
  * @param {Object} config - Database configuration
  */
 function saveDbConfig(config) {
+  // Salvează configurația în store
   dbStore.set('dbConfig', config);
+  
+  // Actualizează fișierul .env din backend
+  updateEnvFile(config.url);
 }
 
 module.exports = {

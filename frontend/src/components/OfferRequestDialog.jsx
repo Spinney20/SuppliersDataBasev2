@@ -48,7 +48,7 @@ import MultiSendDialog from './MultiSendDialog';
 const initialItem = { name: '', quantity: '', unit: '' };
 
 // Adaug constante pentru localStorage
-const STORAGE_KEY = 'offerRequestData';
+const getStorageKey = (type) => `offerRequestData_${type || 'global'}`;
 
 // Dialog paper props for consistent styling
 const dialogPaperProps = {
@@ -92,6 +92,9 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
   // Store selected supplier contacts for multi-send
   const [selectedSupplierContacts, setSelectedSupplierContacts] = useState(supplierContacts || []);
 
+  // Add state for table format toggle
+  const [useTableFormat, setUseTableFormat] = useState(false);
+
   // Get categories based on type
   const { data: categories = [] } = useCategories(selectedAgencyId, type);
   
@@ -121,15 +124,26 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
   // Funcție pentru salvarea datelor în localStorage
   const saveFormData = () => {
     const formData = {
+      subject,
       tenderName,
       tenderNumber,
       items,
       transferLink,
-      isSubcontract
+      isSubcontract,
+      selectedCategory: selectedCategory ? { id: selectedCategory.id, name: selectedCategory.name } : null,
+      selectedSuppliers: Array.isArray(selectedSuppliers) 
+        ? selectedSuppliers.map(s => ({ id: s.id, name: s.name }))
+        : (selectedSuppliers ? [{ id: selectedSuppliers.id, name: selectedSuppliers.name }] : []),
+      useMultiSend,
+      selectedSupplierContacts,
+      useTableFormat // Save table format preference
     };
     
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(formData));
+      // Salvăm datele atât global cât și specific pentru tipul curent
+      localStorage.setItem(getStorageKey('global'), JSON.stringify(formData));
+      localStorage.setItem(getStorageKey(type), JSON.stringify(formData));
+      console.log(`Datele au fost salvate pentru ${type}`);
     } catch (error) {
       console.error('Error saving form data to localStorage:', error);
     }
@@ -138,14 +152,44 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
   // Funcție pentru încărcarea datelor din localStorage
   const loadFormData = () => {
     try {
-      const savedData = localStorage.getItem(STORAGE_KEY);
+      // Încercăm să încărcăm datele specifice pentru tipul curent
+      let savedData = localStorage.getItem(getStorageKey(type));
+      
+      // Dacă nu există date specifice, încercăm să încărcăm datele globale
+      if (!savedData) {
+        savedData = localStorage.getItem(getStorageKey('global'));
+      }
+      
       if (savedData) {
         const parsedData = JSON.parse(savedData);
+        
+        // Setăm datele de bază
+        if (parsedData.subject) setSubject(parsedData.subject);
         setTenderName(parsedData.tenderName || '');
         setTenderNumber(parsedData.tenderNumber || '');
         setItems(parsedData.items && parsedData.items.length > 0 ? parsedData.items : [{ ...initialItem }]);
         setTransferLink(parsedData.transferLink || '');
         setIsSubcontract(parsedData.isSubcontract || false);
+        
+        // Setăm datele avansate dacă există
+        if (parsedData.selectedCategory) {
+          setSelectedCategory(parsedData.selectedCategory);
+        }
+        
+        if (parsedData.useMultiSend) {
+          setUseMultiSend(parsedData.useMultiSend);
+        }
+        
+        if (parsedData.selectedSupplierContacts && parsedData.selectedSupplierContacts.length > 0) {
+          setSelectedSupplierContacts(parsedData.selectedSupplierContacts);
+        }
+
+        // Load table format preference if exists
+        if (parsedData.useTableFormat !== undefined) {
+          setUseTableFormat(parsedData.useTableFormat);
+        }
+        
+        console.log(`Datele au fost încărcate pentru ${type}`);
       }
     } catch (error) {
       console.error('Error loading form data from localStorage:', error);
@@ -205,11 +249,25 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
     if (open) {
       saveFormData();
     }
-  }, [tenderName, tenderNumber, items, transferLink, isSubcontract, open]);
+  }, [
+    tenderName, 
+    tenderNumber, 
+    items, 
+    transferLink, 
+    isSubcontract, 
+    open, 
+    subject, 
+    selectedCategory, 
+    selectedSuppliers, 
+    useMultiSend, 
+    selectedSupplierContacts,
+    useTableFormat, // Add table format to the dependency array
+    type // Adăugăm tipul pentru a asigura salvarea corectă când se schimbă
+  ]);
 
   // Function to reset all form fields
   const resetFormFields = () => {
-    setSubject('');
+    setSubject(`Cerere de ofertă ${type === 'material' ? 'materiale' : 'servicii'} - Viarom Construct`);
     setTenderName('');
     setTenderNumber('');
     setRecipients([]);
@@ -228,12 +286,34 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
     setIsSending(false);
     setOpenPreview(false);
     setPreviewData(null);
+    setUseTableFormat(false); // Reset table format toggle
 
     // Șterge datele din localStorage
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(getStorageKey(type));
+      localStorage.removeItem(getStorageKey('global'));
+      console.log(`Datele au fost resetate pentru ${type}`);
     } catch (error) {
       console.error('Error removing form data from localStorage:', error);
+    }
+  };
+
+  // Funcție pentru resetarea doar a articolelor
+  const resetItems = () => {
+    setItems([{ ...initialItem }]);
+    
+    // Actualizează localStorage cu noile articole goale
+    try {
+      const savedData = localStorage.getItem(getStorageKey(type));
+      if (savedData) {
+        const parsedData = JSON.parse(savedData);
+        parsedData.items = [{ ...initialItem }];
+        localStorage.setItem(getStorageKey(type), JSON.stringify(parsedData));
+        localStorage.setItem(getStorageKey('global'), JSON.stringify(parsedData));
+      }
+      console.log('Articolele au fost resetate');
+    } catch (error) {
+      console.error('Error updating form data in localStorage:', error);
     }
   };
 
@@ -273,12 +353,24 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
         });
         
         if (files && files.length > 0) {
+          console.log('Selected Electron files:', files);
+          
           // Add new files to the list (avoid duplicates)
           const newFiles = files.filter(file => 
             !selectedFiles.some(existing => existing.path === file.path)
-          );
+          ).map(file => ({
+            ...file,
+            displayName: file.name, // Ensure we have a displayName for each file
+            path: file.path, // Make sure path is explicitly set
+            file: null // No File object for Electron
+          }));
           
-          setSelectedFiles(prev => [...prev, ...newFiles]);
+          console.log('Adding Electron files:', newFiles);
+          setSelectedFiles(prev => {
+            const updated = [...prev, ...newFiles];
+            console.log('Updated selectedFiles:', updated);
+            return updated;
+          });
         }
       } catch (error) {
         console.error('Error selecting files:', error);
@@ -288,19 +380,31 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
       const input = document.createElement('input');
       input.type = 'file';
       input.multiple = true;
+      input.accept = '*/*'; // Accept all file types
       
       input.onchange = (e) => {
         const files = Array.from(e.target.files);
         if (files.length > 0) {
-          const fileObjects = files.map(file => ({
-            name: file.name,
-            path: URL.createObjectURL(file),
-            size: file.size,
-            type: file.type,
-            file: file // Keep reference to the actual File object
-          }));
+          console.log('Selected web files:', files);
           
-          setSelectedFiles(prev => [...prev, ...fileObjects]);
+          const fileObjects = files.map(file => {
+            console.log(`Processing file: ${file.name}, size: ${file.size}, type: ${file.type}`);
+            return {
+              name: file.name,
+              displayName: file.name,
+              path: URL.createObjectURL(file), // This is just for display
+              size: file.size,
+              type: file.type,
+              file: file // Keep reference to the actual File object
+            };
+          });
+          
+          console.log('Created file objects:', fileObjects);
+          setSelectedFiles(prev => {
+            const newFiles = [...prev, ...fileObjects];
+            console.log('Updated selectedFiles:', newFiles);
+            return newFiles;
+          });
         }
       };
       
@@ -379,13 +483,16 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
 
   // Handle supplier selection
   const handleSupplierChange = (event, newValue) => {
-    setSelectedSuppliers(newValue);
+    // Ensure newValue is always an array
+    const suppliersArray = Array.isArray(newValue) ? newValue : (newValue ? [newValue] : []);
+    
+    setSelectedSuppliers(suppliersArray);
     
     // Auto-populate recipient and CC fields based on selected suppliers
     const recipientEmails = [];
     const ccEmails = [];
     
-    newValue.forEach(supplier => {
+    suppliersArray.forEach(supplier => {
       // Add contact emails to recipients
       supplier.contacts.forEach(contact => {
         if (contact.email && isValidEmail(contact.email) && !recipientEmails.includes(contact.email)) {
@@ -450,6 +557,14 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
         return null;
       }
       
+      // Ensure we have proper document paths and names
+      const documentPaths = selectedFiles.map(file => file.path || '');
+      const documentNames = selectedFiles.map(file => file.displayName || file.name || 'document');
+      
+      console.log('Prepared document paths:', documentPaths);
+      console.log('Prepared document names:', documentNames);
+      console.log('Selected files objects:', selectedFiles);
+      
       // Construiește datele pentru cererea de ofertă
       const requestData = {
         subject,
@@ -458,10 +573,12 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
         recipient_emails: recipients,
         cc_emails: ccRecipients,
         items: validItems,
-        documents: selectedFiles.map(file => file.path),
+        documents: documentPaths,
+        document_names: documentNames,
         transfer_link: transferLink,
         subcontract: isSubcontract,
         type_mode: type,
+        use_table_format: useTableFormat, // Add table format flag
         user_data: {
           nume: user.nume,
           post: user.post,
@@ -527,49 +644,117 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
       setIsSending(true);
       setError(null);
       
-      console.log('Sending offer request data:', JSON.stringify(data, null, 2));
+      console.log('Preparing offer request data for sending...');
       
       // Determină endpoint-ul în funcție de modul de trimitere
       const endpoint = useMultiSend ? '/send-multiple-offer-requests' : '/send-offer-request';
       
-      // Send request to backend
-      const response = await api.post(endpoint, data);
+      // Check if we need to handle file uploads (for web version)
+      const hasWebFiles = selectedFiles.some(file => file.file && file.file instanceof File);
       
-      if (response.data && response.data.success) {
-        // În cazul trimiterii multiple, afișăm un status mai detaliat
-        if (useMultiSend) {
-          setMultiSendStatus({
-            inProgress: false,
-            total: selectedSupplierContacts.length,
-            sent: response.data.details.filter(d => d.success).length,
-            failed: response.data.details.filter(d => !d.success).length,
-            details: response.data.details
-          });
-          
-          // Afișăm un mesaj cu rezultatul
-          const successCount = response.data.details.filter(d => d.success).length;
-          const failCount = response.data.details.filter(d => !d.success).length;
-          
-          if (failCount === 0) {
-            alert(`Toate cele ${successCount} cereri de ofertă au fost trimise cu succes!`);
-          } else {
-            alert(`Au fost trimise ${successCount} cereri de ofertă cu succes și ${failCount} au eșuat.`);
+      if (hasWebFiles) {
+        // Web version with File objects - we need to send as FormData
+        const formData = new FormData();
+        
+        // Add all the regular data as a JSON string
+        const dataWithoutFiles = { ...data };
+        delete dataWithoutFiles.documents; // Remove document paths
+        formData.append('data', JSON.stringify(dataWithoutFiles));
+        
+        console.log('Selected files to send:', selectedFiles);
+        
+        // Add each file with a predictable name pattern
+        let fileCount = 0;
+        for (const fileObj of selectedFiles) {
+          if (fileObj.file && fileObj.file instanceof File) {
+            console.log(`Appending file ${fileCount}: ${fileObj.name} (${fileObj.file.size} bytes)`);
+            
+            // Ensure the file is valid
+            if (fileObj.file.size > 0) {
+              try {
+                // Create a new File object to ensure it's properly serialized
+                const file = new File([fileObj.file], fileObj.name, { type: fileObj.file.type });
+                formData.append(`file_${fileCount}`, file);
+                console.log(`Successfully appended file ${fileCount}: ${file.name} (${file.size} bytes)`);
+                fileCount++;
+              } catch (error) {
+                console.error(`Error appending file ${fileObj.name}:`, error);
+              }
+            } else {
+              console.warn(`Skipping empty file: ${fileObj.name}`);
+            }
+          } else if (fileObj.path) {
+            console.log(`File has path but no File object: ${fileObj.path}`);
           }
-        } else {
-          // Mesaj standard pentru trimitere simplă
-          alert('Cererea de ofertă a fost trimisă cu succes!');
         }
         
-        // Close dialog
-        onClose();
+        // Log the FormData keys for debugging
+        console.log('FormData keys:');
+        for (let key of formData.keys()) {
+          console.log(` - ${key}`);
+          if (key.startsWith('file_')) {
+            const file = formData.get(key);
+            console.log(`   - File: ${file.name}, size: ${file.size}, type: ${file.type}`);
+          }
+        }
+        
+        // Send with FormData - explicitly set Content-Type to undefined to let browser handle it
+        console.log('Sending request with FormData...');
+        const response = await api.post(endpoint, formData, {
+          headers: {
+            'Content-Type': undefined
+          }
+        });
+        
+        console.log('Response received:', response);
+        handleEmailResponse(response);
       } else {
-        setError('A apărut o eroare la trimiterea cererii de ofertă.');
+        // Electron version or no files - send as regular JSON
+        console.log('Sending offer request data with documents:', data.documents);
+        console.log('Document names:', data.document_names);
+        const response = await api.post(endpoint, data);
+        handleEmailResponse(response);
       }
     } catch (error) {
       console.error('Error sending offer request:', error);
+      console.error('Error details:', error.response?.data);
       setError(`Eroare: ${error.response?.data?.detail || error.message}`);
     } finally {
       setIsSending(false);
+    }
+  };
+  
+  // Helper function to handle email response
+  const handleEmailResponse = (response) => {
+    if (response.data && response.data.success) {
+      // În cazul trimiterii multiple, afișăm un status mai detaliat
+      if (useMultiSend) {
+        setMultiSendStatus({
+          inProgress: false,
+          total: selectedSupplierContacts.length,
+          sent: response.data.details.filter(d => d.success).length,
+          failed: response.data.details.filter(d => !d.success).length,
+          details: response.data.details
+        });
+        
+        // Afișăm un mesaj cu rezultatul
+        const successCount = response.data.details.filter(d => d.success).length;
+        const failCount = response.data.details.filter(d => !d.success).length;
+        
+        if (failCount === 0) {
+          alert(`Toate cele ${successCount} cereri de ofertă au fost trimise cu succes!`);
+        } else {
+          alert(`Au fost trimise ${successCount} cereri de ofertă cu succes și ${failCount} au eșuat.`);
+        }
+      } else {
+        // Mesaj standard pentru trimitere simplă
+        alert('Cererea de ofertă a fost trimisă cu succes!');
+      }
+      
+      // Nu mai închidem dialogul - lăsăm utilizatorul să decidă când să închidă
+      setOpenPreview(false);
+    } else {
+      setError('A apărut o eroare la trimiterea cererii de ofertă.');
     }
   };
 
@@ -929,7 +1114,7 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
                 />
               </Box>
               
-              {type === 'service' && (
+              {type === 'serviciu' && (
                 <FormControlLabel
                   control={
                     <Switch
@@ -1052,9 +1237,50 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
             
             {/* 4. Articole */}
             <Box>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
-                Articole
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
+                  Articole
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={useTableFormat}
+                        onChange={(e) => setUseTableFormat(e.target.checked)}
+                        color="info"
+                        size="small"
+                      />
+                    }
+                    label="Format tabel"
+                    sx={{ 
+                      color: '#fff', 
+                      '& .MuiFormControlLabel-label': { 
+                        fontSize: '0.85rem',
+                        color: useTableFormat ? '#64b5f6' : 'rgba(255,255,255,0.7)'
+                      } 
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    onClick={resetItems}
+                    sx={{ 
+                      minWidth: 'auto',
+                      py: 0.2,
+                      px: 1,
+                      fontSize: '0.7rem',
+                      color: 'rgba(255,152,0,0.9)',
+                      borderColor: 'rgba(255,152,0,0.3)',
+                      '&:hover': {
+                        borderColor: 'rgba(255,152,0,0.9)',
+                        backgroundColor: 'rgba(255,152,0,0.1)'
+                      }
+                    }}
+                    variant="outlined"
+                  >
+                    Resetează articole
+                  </Button>
+                </Box>
+              </Box>
               
               {items.map((item, index) => (
                 <Box key={index} sx={{ display: 'flex', gap: 1, mb: 0.75, alignItems: 'center' }}>
@@ -1193,23 +1419,43 @@ export default function OfferRequestDialog({ open, onClose, type, multiSendMode 
           </Box>
         </StyledDialogContent>
 
-        <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          <Button 
-            onClick={onClose}
-            disabled={isSending}
-            variant="outlined"
-            size="small"
-            sx={{
-              color: 'rgba(255,100,100,0.9)',
-              borderColor: 'rgba(255,100,100,0.5)',
-              '&:hover': {
-                borderColor: 'rgba(255,100,100,0.9)',
-                backgroundColor: 'rgba(255, 0, 0, 0.08)',
-              },
-            }}
-          >
-            Anulează
-          </Button>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between' }}>
+          <Box>
+            <Button 
+              onClick={resetFormFields}
+              disabled={isSending}
+              variant="outlined"
+              size="small"
+              sx={{
+                color: '#ff9800',
+                borderColor: 'rgba(255,152,0,0.5)',
+                mr: 1,
+                '&:hover': {
+                  borderColor: '#ff9800',
+                  backgroundColor: 'rgba(255, 152, 0, 0.08)',
+                },
+              }}
+            >
+              Resetează
+            </Button>
+            
+            <Button 
+              onClick={onClose}
+              disabled={isSending}
+              variant="outlined"
+              size="small"
+              sx={{
+                color: 'rgba(255,100,100,0.9)',
+                borderColor: 'rgba(255,100,100,0.5)',
+                '&:hover': {
+                  borderColor: 'rgba(255,100,100,0.9)',
+                  backgroundColor: 'rgba(255, 0, 0, 0.08)',
+                },
+              }}
+            >
+              Închide
+            </Button>
+          </Box>
           
           <Button
             variant="contained"
