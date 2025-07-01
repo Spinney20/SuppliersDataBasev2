@@ -24,13 +24,13 @@ let isBackendStarted = false; // Flag pentru a urmări dacă backend-ul a pornit
 function createWindow() {
   // Calculăm dimensiunile proporționale cu 1920x1000
   const screenSize = require('electron').screen.getPrimaryDisplay().workAreaSize;
-  const aspectRatio = 1920 / 1000;
-  
+  const aspectRatio = 1700 / 1000;
+
   // Calculăm dimensiunile păstrând proporția 1920x1000
   // Folosim 80% din înălțimea ecranului ca bază
   const height = Math.floor(screenSize.height * 0.8);
   const width = Math.floor(height * aspectRatio);
-  
+
   mainWindow = new BrowserWindow({
     width: width,
     height: height,
@@ -76,11 +76,11 @@ function createWindow() {
   });
 
   // Load the app
-  const startUrl = process.env.ELECTRON_START_URL || 
-    (isDev 
-      ? 'http://localhost:5173' 
+  const startUrl = process.env.ELECTRON_START_URL ||
+    (isDev
+      ? 'http://localhost:5173'
       : `file://${path.join(__dirname, '../dist/index.html')}`);
-  
+
   mainWindow.loadURL(startUrl);
 
   // Open DevTools if in dev mode
@@ -96,7 +96,7 @@ function createWindow() {
     if (!isAppQuitting) {
       e.preventDefault();
       console.log('Window closing, stopping Python backend...');
-      
+
       // Oprim procesul Python și apoi închidem fereastra
       stopPythonBackendWithTimeout().then(() => {
         console.log('Python backend stopped, now closing window');
@@ -116,7 +116,7 @@ function startPythonBackend() {
   if (isBackendStarted) return; // Prevenim pornirea multiplă
 
   const dbConfig = getDbConfig();
-  
+
   // Determine the path to the Python script
   let scriptPath;
   if (isDev) {
@@ -137,23 +137,23 @@ function startPythonBackend() {
   // Start the Python process using spawn from child_process
   try {
     const { spawn } = require('child_process');
-    
+
     // Get Python executable path
     let pythonPath = 'python'; // default
     if (process.platform === 'win32') {
       pythonPath = 'python'; // on Windows, use 'python' or 'py'
     }
-    
+
     console.log('Starting Python backend...');
-    
+
     // Folosim direct uvicorn cu flag-uri pentru pornire rapidă
     pythonProcess = spawn(pythonPath, [
-      '-m', 
-      'uvicorn', 
-      'main:app', 
-      '--host', 
-      '127.0.0.1', 
-      '--port', 
+      '-m',
+      'uvicorn',
+      'main:app',
+      '--host',
+      '127.0.0.1',
+      '--port',
       '8000',
       '--no-access-log', // Eliminăm logurile de acces pentru pornire mai rapidă
       '--workers', '1',   // Un singur worker pentru aplicația Electron
@@ -191,7 +191,7 @@ function startPythonBackend() {
     pythonProcess.on('close', (code) => {
       console.log(`Python backend exited with code ${code}`);
       isBackendStarted = false;
-      
+
       // Arătăm eroarea doar dacă procesul nu a fost oprit intenționat și codul de ieșire este diferit de 0 și null
       if (!pythonProcess.intentionallyKilled && code !== 0 && code !== null && mainWindow) {
         dialog.showErrorBox(
@@ -199,7 +199,7 @@ function startPythonBackend() {
           `Python backend exited unexpectedly with code ${code}`
         );
       }
-      
+
       pythonProcess = null;
     });
 
@@ -229,7 +229,7 @@ function startPythonBackend() {
 // Stop Python backend
 function stopPythonBackend() {
   console.log('Attempting to stop Python backend...');
-  
+
   // Funcție pentru a verifica și opri orice proces care rulează pe portul 8000
   const checkAndKillPortProcesses = () => {
     return new Promise((resolve) => {
@@ -238,13 +238,13 @@ function stopPythonBackend() {
           if (!error && stdout) {
             const lines = stdout.trim().split('\n');
             const killPromises = [];
-            
+
             for (const line of lines) {
               const parts = line.trim().split(/\s+/);
               if (parts.length > 4 && line.includes('LISTENING')) {
                 const pid = parts[parts.length - 1];
                 console.log(`Found process on port 8000 with PID ${pid}, attempting to kill`);
-                
+
                 killPromises.push(new Promise((killResolve) => {
                   require('child_process').exec(`taskkill /pid ${pid} /F`, (err) => {
                     if (err) {
@@ -257,7 +257,7 @@ function stopPythonBackend() {
                 }));
               }
             }
-            
+
             // Așteptăm terminarea tuturor proceselor de kill
             Promise.all(killPromises).then(() => {
               console.log('All port 8000 processes have been addressed');
@@ -274,20 +274,20 @@ function stopPythonBackend() {
       }
     });
   };
-  
+
   // Procesul principal de oprire
   return new Promise((resolve) => {
     if (pythonProcess) {
       try {
         console.log(`Attempting to terminate Python process with PID ${pythonProcess.pid}`);
-        
+
         // Marcăm procesul ca fiind oprit intenționat pentru a evita afișarea erorii
         pythonProcess.intentionallyKilled = true;
-        
+
         if (process.platform === 'win32') {
           // Verificăm mai întâi dacă procesul mai există
           const { exec } = require('child_process');
-          
+
           // Prima încercăm să terminăm procesul direct
           try {
             pythonProcess.kill('SIGTERM');
@@ -295,7 +295,7 @@ function stopPythonBackend() {
           } catch (killError) {
             console.log(`Error sending SIGTERM to process: ${killError.message}`);
           }
-          
+
           // Apoi folosim taskkill pentru a ne asigura că toate procesele copil sunt oprite
           exec(`taskkill /pid ${pythonProcess.pid} /T /F`, (error) => {
             if (error) {
@@ -303,7 +303,7 @@ function stopPythonBackend() {
             } else {
               console.log('Python backend stopped with taskkill');
             }
-            
+
             // Verificăm și alte procese pe portul 8000
             checkAndKillPortProcesses().then(() => {
               pythonProcess = null;
@@ -320,7 +320,7 @@ function stopPythonBackend() {
       } catch (err) {
         console.log(`Error during Python process cleanup: ${err.message}`);
         pythonProcess = null;
-        
+
         // Verificăm și alte procese pe portul 8000
         checkAndKillPortProcesses().then(resolve);
       }
@@ -340,7 +340,7 @@ function stopPythonBackendWithTimeout(timeout = 2000) {
       console.log(`Timeout reached (${timeout}ms) while stopping Python backend, continuing anyway`);
       resolve();
     }, timeout);
-    
+
     // Încercăm să oprim procesul Python
     stopPythonBackend()
       .then(() => {
@@ -364,20 +364,20 @@ ipcMain.handle('save-db-config', async (event, config) => {
   try {
     // Test the connection before saving
     await dbConfig.testConnection(config);
-    
+
     // Save the configuration if connection test passes
     dbConfig.saveDbConfig(config);
-    
+
     // Restart Python backend with new config
     stopPythonBackend();
     startPythonBackend();
-    
+
     return { success: true };
   } catch (error) {
     console.error('Database connection test failed:', error);
-    return { 
-      success: false, 
-      error: error.message || 'Failed to connect to database' 
+    return {
+      success: false,
+      error: error.message || 'Failed to connect to database'
     };
   }
 });
@@ -390,7 +390,7 @@ app.whenReady().then(() => {
       if (!error && stdout) {
         const lines = stdout.trim().split('\n');
         let foundProcess = false;
-        
+
         for (const line of lines) {
           const parts = line.trim().split(/\s+/);
           if (parts.length > 4 && line.includes('LISTENING')) {
@@ -406,7 +406,7 @@ app.whenReady().then(() => {
             });
           }
         }
-        
+
         // Așteptăm puțin pentru a ne asigura că portul este eliberat
         setTimeout(() => {
           startPythonBackend();
@@ -423,25 +423,25 @@ app.whenReady().then(() => {
     startPythonBackend();
     createWindow();
   }
-  
+
   // Set up IPC handlers for database config
   ipcMain.handle('getDbConfig', () => {
     return getDbConfig();
   });
-  
+
   ipcMain.handle('setDbConfig', (event, config) => {
     return setDbConfig(config);
   });
-  
+
   // Set up IPC handlers for user data
   ipcMain.handle('getUserData', () => {
     return getUserData();
   });
-  
+
   ipcMain.handle('setUserData', (event, userData) => {
     return setUserData(userData);
   });
-  
+
   ipcMain.handle('clearUserData', () => {
     clearUserData();
     return null;
@@ -452,7 +452,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     // Marcăm aplicația ca fiind în proces de închidere
     isAppQuitting = true;
-    
+
     // Oprim procesul Python înainte de a închide aplicația
     stopPythonBackendWithTimeout().then(() => {
       console.log('Python backend stopped, now quitting app');
@@ -470,4 +470,4 @@ app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
-}); 
+});
